@@ -3,8 +3,8 @@ This document will guide you through the process of understanding and using a Py
 # Table of Contents
 
 1. [Introduction](#Introduction)
-2. [Setup](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
-3. [Modules](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
+2. [Setup](#Setup)
+3. [Modules](#Modules)
     1. [Fundamental Modules](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
         1. [Initialization](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21) 
         2. [Adding variables](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
