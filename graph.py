@@ -23,7 +23,8 @@ def visualize(graph):
 		pos = nx.spring_layout(graph)
 
 	nx.draw(graph, pos, with_labels=True, node_color=color_map, font_weight='bold', arrows=True)
-	plt.show()
+	plt.title("Graph")
+	plt.show(block=False)
 
 def write_joint_distribution(variables):
 	"""

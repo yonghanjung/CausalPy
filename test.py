@@ -5,7 +5,7 @@ import examples
 
 if __name__ == "__main__":
 	''' Predefined examples '''
-	[graph_dict, node_positions, X, Y] = examples.Tikka1() 
+	# [graph_dict, node_positions, X, Y] = examples.Tikka1() 
 	# [graph_dict, node_positions, X, Y] = examples.Tikka2() 
 	# [graph_dict, node_positions, X, Y] = examples.FD0() 
 	# [graph_dict, node_positions, X, Y] = examples.FD1() 
@@ -32,7 +32,8 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.unID2() 
 
 	# Generate the random graph 
-	# [graph_dict, node_positions, X, Y] = examples.Random_Example_Generator(5, 4, 2, 1)
+	[graph_dict, node_positions, X, Y] = examples.Random_Example_Generator(num_observables = 5, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 
+																			condition_ID = True, condition_BD = False, condition_mSBD = True)
 	
 	# Copy the graph for comparing with Fusion
 	pyperclip.copy(graph.graph_dict_to_fusion_graph(graph_dict))

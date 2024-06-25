@@ -83,8 +83,8 @@ def ID_return_Ctree(G, X, Y):
 			W = S_
 
 		if unID_flag:
-			print("P(Y | do(X)) is not identifiable from G because Q["f'{Di}'"] is not identifiable from G("f'{A}'")")
-			return [False, Di, A]
+			# print("P(Y | do(X)) is not identifiable from G because Q["f'{Di}'"] is not identifiable from G("f'{A}'")")
+			return [0, Di, A]
 			# raise ValueError("P(Y | do(X)) is not identifiable from G due to G("f'{A}'")")
 
 		else:
@@ -96,7 +96,7 @@ def ID_return_Ctree(G, X, Y):
 def draw_C_tree(G,X,Y,save_path = None):
 	[ID_constant, ID_dict_components, ID_dict_operations] = ID_return_Ctree(G, X, Y)
 	if ID_constant == -1: 
-		print("P(Y | do(X)) = P(Y)")
+		# print("P(Y | do(X)) = P(Y)")
 		return None 
 	
 	elif ID_constant != 1:
@@ -321,7 +321,7 @@ def draw_C_tree(G,X,Y,save_path = None):
 def draw_AC_tree(G, X, Y):
 	[ID_constant, ID_dict_components, ID_dict_operations] = ID_return_Ctree(G, X, Y)
 	if ID_constant == -1: 
-		print("P(Y | do(X)) = P(Y)")
+		# print("P(Y | do(X)) = P(Y)")
 		return None 
 	
 	elif ID_constant != 1:
@@ -499,7 +499,7 @@ def causal_identification(G,X,Y,latex = True):
 			plt.figure("estimand",figsize=(15, 6))
 			plt.text(0.5, 0.5, f'${causal_expression}$', fontsize=15, ha='center')
 			plt.axis('off')
-			plt.show()
+			plt.show(block=False)
 			return None
 		else: 
 			return causal_expression
@@ -516,13 +516,13 @@ def causal_identification(G,X,Y,latex = True):
 	
 	# Return if P(Y | do(x)) = P(Y)
 	if ID_constant == -1:
-		message = f"{X} has not causal effect on {Y}"
-		return graph.write_joint_distribution(Y), message
+		print(f"P({Y_print} | do({X_print})) = P({Y_print})")
+		return None
 
 	# Return if P(Y | do(x)) is not ID 
 	elif ID_constant == 0:
-		message = f"P({Y_print} | do({X_print})) is not identifiable from G"
-		return "FAIL", message
+		print( f"P({Y_print} | do({X_print})) is not identifiable from G, since Q[{ID_dict_components}] is not identifiable from G({ID_dict_operations})")
+		return None
 
 	# Preprocess the graph 
 	G, X, Y = preprocess_GXY_for_ID(G, X, Y)
@@ -539,19 +539,20 @@ def causal_identification(G,X,Y,latex = True):
 	condition_adjustment = adjustment.check_admissibility(G,X,Y)
 	if condition_adjustment:
 		Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
-		message = f"{Z} is admisslbe w.r.t. {X} and {Y}"
+		message = f"{Z} is admisslbe w.r.t. {X} and {Y} in G"
 		estimand = f" = {adjustment.adjustment_estimand(X,Y,Z, latex)}"
 		causal_expression += estimand
+		print(message)
 		return print_estimand(causal_expression, latex)
 
-	# 240621 YONGHAN 
+	# Check if P(Y | do(x)) can be estimated through the mSBD
 	condition_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
 	if condition_mSBD:
 		dict_X, dict_Z, dict_Y = mSBD.check_SAC_with_results(G,X,Y, minimum = True)
-		message = f"{{{dict_Z}}} is mSBD admisslbe w.r.t. {dict_X} and {dict_Y}"
+		message = f"{{{dict_Z}}} is mSBD admisslbe w.r.t. {dict_X} and {dict_Y} in G"
 		estimand = f" = {mSBD.mSBD_estimand(G, X, Y, latex, minimum=True)}"
 		causal_expression += estimand
-		# return print_estimand(causal_expression, latex)
+		print(message)
 		return print_estimand(causal_expression, latex)
 		
 

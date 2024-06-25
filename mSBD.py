@@ -153,6 +153,17 @@ def constructive_mSBD_criterion(G, X, Y):
 
 
 def check_mSBD_with_results(G,X,Y):
+	"""
+	Check if P(Y | do(=X)) can be represented as an mSBD, and if so, provide the partitioned X,Z,Y
+
+	Parameters:
+	G (nx.DiGraph): The directed graph.
+	X (list): List of treatment variables.
+	Y (list): List of outcome variables.
+
+	Returns:
+	dict: if mSBD admissible, the dictionaries for X, Z, Y. Otherwise, raise an error "not mSBD admissible"
+	"""
 	if not constructive_mSBD_criterion(G,X,Y): 
 		raise ValueError("Not mSBD Admissible")
 
@@ -261,6 +272,17 @@ def construct_SAC_Z(G, X, Y):
 	return Z
 
 def construct_minimum_SAC_Z(G,X,Y):
+	'''
+	Construct the minimal candidate Z for checking mSBD
+
+	Parameters:
+	G (nx.DiGraph): The directed graph representing the causal structure.
+	X (list): List of treatment variables.
+	Y (list): List of outcome variables.
+
+	Returns:
+	dict: A dictionary where keys are indices and values are the Zi sets.
+	'''
 	Y_partitions = partition_Y(G, X, Y)
 	Z = construct_SAC_Z(G,X,Y)
 	m = max([int(key[1:]) for key in Y_partitions.keys()])
@@ -321,6 +343,17 @@ def constructive_SAC_criterion(G, X, Y):
 
 
 def check_SAC_with_results(G,X,Y, minimum = False):
+	"""
+	Check if P(Y | do(=X)) can be represented as an sequential admissible, and if so, provide the partitioned X,Z,Y
+
+	Parameters:
+	G (nx.DiGraph): The directed graph.
+	X (list): List of treatment variables.
+	Y (list): List of outcome variables.
+
+	Returns:
+	dict: if sequential admissible admissible, the dictionaries for X, Z, Y. Otherwise, raise an error "not sequential admissible admissible"
+	"""
 	if not constructive_SAC_criterion(G,X,Y): 
 		raise ValueError("Not Sequential Covariate Admissible")
 
@@ -356,6 +389,20 @@ def check_SAC_with_results(G,X,Y, minimum = False):
 
 
 def mSBD_estimand(G, X, Y, latex = False, minimum=False):
+	"""
+	Provide the estimand for the mSBD adjustment
+
+	Parameters:
+	G (nx.DiGraph): The directed graph.
+	X (list): List of treatment variables.
+	Y (list): List of outcome variables. 
+	latex (bool): True if the estimand is in the latex syntax. 
+	minimum (bool): If Z needs to be the minimum sequential covariate 
+
+	Returns:
+	str: mSBD estimand
+	"""
+
 	if adjustment.check_admissibility(G,X,Y):
 		if minimum:
 			Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
