@@ -24,10 +24,10 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
     17. [Check Inducing Paths](#Check-Inducing-Paths)
     18. [Check Inducing Paths with Unmeasured Variables](#Check-Inducing-Paths-with-Unmeasured-Variables)
     19. [Check if Node is Unmeasured](#Check-if-Node-is-Unmeasured)
-    20. [Find Variables with No Inducing Paths](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-variables-with-no-inducing-paths)
-    21. [Reachable Set](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#reachable-set)
-    22. [Convert Graph Dictionary to Fusion Graph](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#convert-graph-dictionary-to-fusion-graph)
-4. [Example Usage](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#example-usage)
+    20. [Find Variables with No Inducing Paths](#Find-Variables-with-No-Inducing-Paths)
+    21. [Reachable Set](#Reachable-Set)
+    22. [Convert Graph Dictionary to Fusion Graph](#Convert-Graph-Dictionary-to-Fusion-Graph)
+4. [Example Usage](#Example-Usage)
 
 ---
 
@@ -594,7 +594,7 @@ print(unmeasured)
 
 ```
 
-### Find Variables with No Inducing Paths
+## Find Variables with No Inducing Paths
 
 **Function:** `find_variables_no_inducing_path(G, nodes)`
 
@@ -623,7 +623,7 @@ print(no_inducing_path_vars)
 
 ```
 
-### Reachable Set
+## Reachable Set
 
 **Function:** `reacheable_set(G, X, A, Z)`
 
@@ -658,7 +658,7 @@ print(reachable_nodes)
 
 ```
 
-### Convert Graph Dictionary to Fusion Graph
+## Convert Graph Dictionary to Fusion Graph
 
 **Function:** `graph_dict_to_fusion_graph(graph_dict)`
 
@@ -688,7 +688,7 @@ fusion_graph = graph_dict_to_fusion_graph(graph_dict)
 
 ```
 
-### Example Usage
+# Example Usage
 
 ```python
 import networkx as nx
@@ -788,4 +788,4 @@ fusion_graph = graph_dict_to_fusion_graph(graph_dict)
 
 ---
 
-This comprehensive documentation covers the functions in `graph.py` and provides detailed usage examples, similar to the provided example documentation for "[SCM.py](http://scm.py/)". If there are additional details or specific formatting requirements, please let me know!
+This comprehensive documentation covers the functions in `graph.py` and provides detailed usage examples, similar to the provided example documentation for `SCM.py`. If there are additional details or specific formatting requirements, please let me know!
