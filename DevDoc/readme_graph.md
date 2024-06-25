@@ -22,8 +22,8 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
     15. [Cut Outgoing Edges](#Cut-Outgoing-Edges)
     16. [Generate Random Graph](#Generate-Random-Graph)
     17. [Check Inducing Paths](#Check-Inducing-Paths)
-    18. [Check Inducing Paths with Unmeasured Variables](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-inducing-paths-with-unmeasured-variables)
-    19. [Check if Node is Unmeasured](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-if-node-is-unmeasured)
+    18. [Check Inducing Paths with Unmeasured Variables](#Check-Inducing-Paths-with-Unmeasured-Variables)
+    19. [Check if Node is Unmeasured](#Check-if-Node-is-Unmeasured)
     20. [Find Variables with No Inducing Paths](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-variables-with-no-inducing-paths)
     21. [Reachable Set](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#reachable-set)
     22. [Convert Graph Dictionary to Fusion Graph](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#convert-graph-dictionary-to-fusion-graph)
@@ -507,7 +507,7 @@ random_G = generate_random_graph(5, 2, 1, 1)
 
 **Function:** `check_inducing_paths(G, nodes1, nodes2, S, L)`
 
-**Description:** Check for inducing paths between two sets of nodes given sets S and L.
+**Description:** Check for inducing paths between two sets of nodes given sets `S` and `L`.
 
 **Parameters:**
 
@@ -519,7 +519,7 @@ random_G = generate_random_graph(5, 2, 1, 1)
 
 **Returns:**
 
-- `bool`: True if there are inducing paths, False otherwise.
+- `bool`: `True` if there are inducing paths, False otherwise.
 
 **Usage Example:**
 
@@ -538,7 +538,7 @@ print(inducing_paths)
 
 ```
 
-### Check Inducing Paths with Unmeasured Variables
+## Check Inducing Paths with Unmeasured Variables
 
 **Function:** `is_inducing_path_with_unmeasured(G, nodes1, nodes2)`
 
@@ -569,7 +569,7 @@ print(inducing_paths)
 
 ```
 
-### Check if Node is Unmeasured
+## Check if Node is Unmeasured
 
 **Function:** `is_unmeasured(node)`
 
