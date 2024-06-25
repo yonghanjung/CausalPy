@@ -9,7 +9,7 @@ This document will guide you through the process of understanding and using a Py
         1. [Initialization](#Initialization) 
         2. [Adding variables](#Adding-Variables)
         3. [Generate samples from observables](#Generate-Samples-from-Observables)
-    2. [Create random SCM](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
+    2. [Create random SCM](#Generating-a-Random-SCM)
         1. [Creating random equations](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21) 
         2. [Assigning unobserved parents](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
     3. [Visualization](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
