@@ -1,11 +1,11 @@
 The `graph.py` module provides functions for creating, manipulating, and visualizing causal graphs. This document explains each function in detail, along with usage examples to help you understand how to use the module effectively.
 
-### Table of Contents
+# Table of Contents
 
-1. [Introduction](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#introduction)
-2. [Setup](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#setup)
-3. [Modules](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#modules)
-    1. [Visualize Graph](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#visualize-graph)
+1. [Introduction](#Introduction)
+2. [Setup](#Setup)
+3. [Modules](#Modules)
+    1. [Visualize Graph](#Visualize-Graph)
     2. [Write Joint Distribution](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#write-joint-distribution)
     3. [Find Topological Order](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-topological-order)
     4. [Create Acyclic Graph](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#create-acyclic-graph)
@@ -31,11 +31,11 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
 
 ---
 
-### Introduction
+# Introduction
 
 The `graph.py` module is designed to assist with the creation and manipulation of causal graphs using the `networkx` library. The module includes functions for visualizing graphs, generating joint distributions, finding topological orders, creating acyclic graphs, and generating subgraphs.
 
-### Setup
+# Setup
 
 To use the `graph.py` module, ensure you have the following libraries installed:
 
@@ -43,9 +43,9 @@ To use the `graph.py` module, ensure you have the following libraries installed:
 pip install networkx matplotlib
 ```
 
-### Modules
+# Modules
 
-### Visualize Graph
+## Visualize Graph
 
 **Function:** `visualize(graph)`
 
