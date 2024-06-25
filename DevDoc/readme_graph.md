@@ -8,8 +8,8 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
     1. [Visualize Graph](#Visualize-Graph)
     2. [Write Joint Distribution](#Write-Joint-Distribution)
     3. [Find Topological Order](#Find-Topological-Order)
-    4. [Create Acyclic Graph](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#create-acyclic-graph)
-    5. [Generate All Possible Orders of X](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#generate-all-possible-orders-of-x)
+    4. [Create Acyclic Graph](#Create-Acyclic-Graph)
+    5. [Generate All Possible Orders of X](#Generate-All-Possible-Orders-of-X)
     6. [Create Subgraphs](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#create-subgraphs)
     7. [List All C-Components](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#list-all-c-components)
     8. [Find C-Components](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-c-components)
@@ -125,7 +125,7 @@ print(topological_order)  # Output: ['T1', 'O1', 'O2', 'Y']
 
 ```
 
-### Create Acyclic Graph
+## Create Acyclic Graph
 
 **Function:** `create_acyclic_graph(graph_dict, an_Y_graph_TF=False, Y=None, node_positions=None)`
 
@@ -158,7 +158,7 @@ G = create_acyclic_graph(graph_dict)
 
 ```
 
-### Generate All Possible Orders of X
+## Generate All Possible Orders of X
 
 **Function:** `all_possible_orders_X(G, X)`
 
