@@ -13,11 +13,11 @@ This document will guide you through the process of understanding and using a Py
         1. [Randomly connecting observables](#Connecting-Observed-Variables) 
         2. [Creating random equations](#Creating-Random-Equations) 
         3. [Assigning unobserved parents](#Assigning-Unobserved-Parents)
-    3. [Visualization](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
-    4. [Generate samples](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
-4. [Example usage](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
-    1. [Generate random SCM](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
-    2. [Create a custom SCM](https://www.notion.so/DevDoc-SCM-py-284541c25c4a45bbaff38759eebb51ff?pvs=21)
+    3. [Visualization](#Visualization)
+    4. [Generate samples](#Generating-Samples)
+4. [Example usage](#Example-Usage)
+    1. [Generate a random SCM](#Generating-a-Random-SCM)
+    2. [Create a custom SCM](#Creating-a-Custom-SCM)
 
 # Introduction
 
