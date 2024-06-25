@@ -20,8 +20,8 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
     13. [Check D-Separation](#Check-D-Separation)
     14. [Cut Incoming Edges](#Cut-Incoming-Edges)
     15. [Cut Outgoing Edges](#Cut-Outgoing-Edges)
-    16. [Generate Random Graph](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#generate-random-graph)
-    17. [Check Inducing Paths](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-inducing-paths)
+    16. [Generate Random Graph](#Generate-Random-Graph)
+    17. [Check Inducing Paths](#Check-Inducing-Paths)
     18. [Check Inducing Paths with Unmeasured Variables](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-inducing-paths-with-unmeasured-variables)
     19. [Check if Node is Unmeasured](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-if-node-is-unmeasured)
     20. [Find Variables with No Inducing Paths](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-variables-with-no-inducing-paths)
@@ -421,7 +421,7 @@ print(d_separated)
 
 ```
 
-### Cut Incoming Edges
+## Cut Incoming Edges
 
 **Function:** `G_cut_incoming_edges(G, X)`
 
@@ -449,7 +449,7 @@ modified_G = G_cut_incoming_edges(G, X)
 
 ```
 
-### Cut Outgoing Edges
+## Cut Outgoing Edges
 
 **Function:** `G_cut_outgoing_edges(G, X)`
 
@@ -477,7 +477,7 @@ modified_G = G_cut_outgoing_edges(G, X)
 
 ```
 
-### Generate Random Graph
+## Generate Random Graph
 
 **Function:** `generate_random_graph(num_observables, num_unobservables, num_treatments, num_outcomes)`
 
@@ -503,7 +503,7 @@ random_G = generate_random_graph(5, 2, 1, 1)
 
 ```
 
-### Check Inducing Paths
+## Check Inducing Paths
 
 **Function:** `check_inducing_paths(G, nodes1, nodes2, S, L)`
 
