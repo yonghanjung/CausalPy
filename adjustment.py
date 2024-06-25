@@ -92,6 +92,18 @@ def proper_backdoor_graph(G, X, Y):
     return G_modified
 
 def check_adjustment_criterion(G, X, Y, Z):
+    '''
+    Check if Z satisfies the adjustment criterion relative to (X,Y) in G
+
+    Parameters:
+    G (nx.DiGraph): The directed graph representing the causal structure.
+    X (list): Set of treatment variables.
+    Y (list): Set of outcome variables.
+    Z (list): Set of covariates
+
+    Returns:
+    bool: True if if Z satisfies the adjustment criterion relative to (X,Y) in G
+    '''
 	G_pbd = proper_backdoor_graph(G, X, Y)
 	dpcp = descedent_proper_causal_path(G,X,Y)
 	if any(z in dpcp for z in Z):
@@ -114,6 +126,7 @@ def construct_adjustment_set(G, X, Y):
     Returns:
     set: The set of nodes suitable for adjustment.
     '''
+
     # Assuming descedent_proper_causal_path(G, X, Y) is defined
     X_set = set(X)
     Y_set = set(Y)
@@ -129,12 +142,36 @@ def construct_adjustment_set(G, X, Y):
     return list(adjustment_set)
 
 def check_admissibility(G, X, Y):
+    '''
+    Check if P(Y | do(X)) can be represented as a back-door adjustment.
+
+    Parameters:
+    G (nx.DiGraph): The original directed graph.
+    X (list): Treatment variables.
+    Y (list): Outcome variables.
+
+    Returns:
+    bool: True if P(Y | do(X)) can be represented as a back-door adjustment.
+    '''
     adjustment_Z = construct_adjustment_set(G, X, Y)
     if check_adjustment_criterion(G, X, Y, adjustment_Z):
         return True
     return False 
 
 def adjustment_estimand(X,Y,Z,latex):
+    '''
+    Generate the back-door adjustment formula "sum_{z}P(y | x,z)P(z)". 
+
+    Parameters:
+    G (nx.DiGraph): The original directed graph.
+    X (list): Treatment variables.
+    Y (list): Outcome variables.
+    Z (list): Covariate variables 
+    latex (bool): True if the output is in the latex syntax.
+
+    Returns:
+    string: "sum_{z}P(y | x,z)P(z)"
+    '''
     Z = list(set(Z))
     Z_val = ', '.join(Z)
     Z_lower_val = ', '.join(char.lower() for char in Z)
@@ -157,6 +194,17 @@ def adjustment_estimand(X,Y,Z,latex):
     return adjustment_estimand
 
 def construct_minimum_adjustment_set(G,X,Y):
+    '''
+    Construct an minimum adjustment set for estimating the causal effect of X on Y.
+
+    Parameters:
+    G (nx.DiGraph): The directed graph representing the causal structure.
+    X (list): Set of treatment variables.
+    Y (list): Set of outcome variables.
+
+    Returns:
+    list: The set of nodes suitable for adjustment.
+    '''
     if check_adjustment_criterion(G,X,Y,[]):
         return set([])
     Z = construct_adjustment_set(G, X, Y)
