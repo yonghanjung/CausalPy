@@ -11,11 +11,11 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
     4. [Create Acyclic Graph](#Create-Acyclic-Graph)
     5. [Generate All Possible Orders of X](#Generate-All-Possible-Orders-of-X)
     6. [Create Subgraphs](#Create-Subgraphs)
-    7. [List All C-Components](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#list-all-c-components)
-    8. [Find C-Components](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-c-components)
-    9. [Find Parents](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-parents)
-    10. [Find Descendants](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-descendants)
-    11. [Find Ancestors](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-ancestors)
+    7. [List All C-Components](#List-All-C-Components)
+    8. [Find C-Components](#Find-C-Components)
+    9. [Find Parents](#Find-Parents)
+    10. [Find Descendants](#Find-Descendants)
+    11. [Find Ancestors](#Find-Ancestors)
     12. [Subgraph of Ancestors of Y](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#subgraph-of-ancestors-of-y)
     13. [Check D-Separation](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-d-separation)
     14. [Cut Incoming Edges](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#cut-incoming-edges)
@@ -215,7 +215,7 @@ sub_G = subgraphs(G, C)
 
 ```
 
-### List All C-Components
+## List All C-Components
 
 **Function:** `list_all_c_components(G)`
 
@@ -242,7 +242,7 @@ print(c_components)
 
 ```
 
-### Find C-Components
+## Find C-Components
 
 **Function:** `find_c_components(G, C)`
 
@@ -271,7 +271,7 @@ print(c_components)
 
 ```
 
-### Find Parents
+## Find Parents
 
 **Function:** `find_parents(G, C)`
 
@@ -302,7 +302,7 @@ print(parents
 
 ```
 
-### Find Descendants
+## Find Descendants
 
 **Function:** `find_descendant(G, nodes)`
 
@@ -331,7 +331,7 @@ print(descendants)
 
 ```
 
-### Find Ancestors
+## Find Ancestors
 
 **Function:** `find_ancestor(G, nodes)`
 
