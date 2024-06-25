@@ -1,8 +1,6 @@
-# Code Document: Understanding and Using Causal Inference Functions
-
 This document provides a detailed explanation of a Python implementation for various causal inference functions. These functions help identify causal paths, check causal criteria, and construct adjustment sets in directed graphs using the NetworkX library.
 
-## Table of Contents
+# Table of Contents
 
 1. [Introduction](#Introduction)
 2. [Setup](#Setup)
@@ -18,11 +16,11 @@ This document provides a detailed explanation of a Python implementation for var
     9. [Minimum Adjustment Set](#Minimum-Adjustment-Set)
 4. [Example Usage](#Example-Usage)
 
-## Introduction
+# Introduction
 
 This code document covers the implementation of several functions to handle causal inference tasks using NetworkX for graph manipulations. These tasks include identifying proper causal paths, checking the backdoor and adjustment criteria, and constructing adjustment sets for estimating causal effects.
 
-## Setup
+# Setup
 
 Ensure you have the necessary libraries installed:
 
@@ -37,9 +35,9 @@ import networkx as nx
 import graph  # Assuming `graph` is a custom module containing auxiliary functions
 ```
 
-## Modules
+# Modules
 
-### Proper Causal Path
+## Proper Causal Path
 
 The `proper_causal_path` function identifies nodes that are descendants of `X` (excluding `X`) and ancestors of `Y`.
 
@@ -61,7 +59,7 @@ def proper_causal_path(G, X, Y):
     return list((set(de_X) - set(X)) & set(an_Y))
 ```
 
-### Descendent Proper Causal Path
+## Descendent Proper Causal Path
 
 The `descedent_proper_causal_path` function finds all descendants of nodes identified by `proper_causal_path`.
 
@@ -71,7 +69,7 @@ def descedent_proper_causal_path(G, X, Y):
     return graph.find_descendant(G, pcp)
 ```
 
-### Backdoor Criterion
+## Backdoor Criterion
 
 The `check_backdoor_criterion` function checks if a set `Z` satisfies the Back-door Criterion relative to `X` and `Y`.
 
@@ -88,7 +86,7 @@ def check_backdoor_criterion(G, X, Y, Z):
     return False
 ```
 
-### Proper Backdoor Graph
+## Proper Backdoor Graph
 
 The `proper_backdoor_graph` function removes edges from nodes in `X` to nodes identified by `proper_causal_path`.
 
@@ -109,7 +107,7 @@ def proper_backdoor_graph(G, X, Y):
     return G_modified
 ```
 
-### Adjustment Criterion
+## Adjustment Criterion
 
 The `check_adjustment_criterion` function checks if a set `Z` satisfies the adjustment criterion relative to `(X, Y)`.
 
@@ -126,7 +124,7 @@ def check_adjustment_criterion(G, X, Y, Z):
     return False
 ```
 
-### Construct Adjustment Set
+## Construct Adjustment Set
 
 The `construct_adjustment_set` function constructs an adjustment set for estimating the causal effect of `X` on `Y`.
 
@@ -144,7 +142,7 @@ def construct_adjustment_set(G, X, Y):
     return list(adjustment_set)
 ```
 
-### Admissibility
+## Admissibility
 
 The `check_admissibility` function checks if `P(Y | do(X))` can be represented as a back-door adjustment.
 
@@ -156,7 +154,7 @@ def check_admissibility(G, X, Y):
     return False
 ```
 
-### Adjustment Estimand
+## Adjustment Estimand
 
 The `adjustment_estimand` function generates the back-door adjustment formula in either plain text or LaTeX format.
 
@@ -184,7 +182,7 @@ def adjustment_estimand(X, Y, Z, latex):
     return adjustment_estimand
 ```
 
-### Minimum Adjustment Set
+## Minimum Adjustment Set
 
 The `construct_minimum_adjustment_set` function constructs a minimum adjustment set for estimating the causal effect of `X` on `Y`.
 
@@ -200,7 +198,7 @@ def construct_minimum_adjustment_set(G, X, Y):
     return Z2
 ```
 
-## Example Usage
+# Example Usage
 
 Below is an example usage of the provided functions:
 
