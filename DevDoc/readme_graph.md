@@ -6,8 +6,8 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
 2. [Setup](#Setup)
 3. [Modules](#Modules)
     1. [Visualize Graph](#Visualize-Graph)
-    2. [Write Joint Distribution](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#write-joint-distribution)
-    3. [Find Topological Order](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#find-topological-order)
+    2. [Write Joint Distribution](#Write-Joint-Distribution)
+    3. [Find Topological Order](#Find-Topological-Order)
     4. [Create Acyclic Graph](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#create-acyclic-graph)
     5. [Generate All Possible Orders of X](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#generate-all-possible-orders-of-x)
     6. [Create Subgraphs](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#create-subgraphs)
@@ -72,7 +72,7 @@ visualize(G)
 
 ```
 
-### Write Joint Distribution
+## Write Joint Distribution
 
 **Function:** `write_joint_distribution(variables)`
 
@@ -97,7 +97,7 @@ print(joint_distribution)  # Output: P(T1 , O1 , O2 , Y)
 
 ```
 
-### Find Topological Order
+## Find Topological Order
 
 **Function:** `find_topological_order(G)`
 
