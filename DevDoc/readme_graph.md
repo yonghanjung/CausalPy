@@ -16,10 +16,10 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
     9. [Find Parents](#Find-Parents)
     10. [Find Descendants](#Find-Descendants)
     11. [Find Ancestors](#Find-Ancestors)
-    12. [Subgraph of Ancestors of Y](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#subgraph-of-ancestors-of-y)
-    13. [Check D-Separation](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-d-separation)
-    14. [Cut Incoming Edges](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#cut-incoming-edges)
-    15. [Cut Outgoing Edges](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#cut-outgoing-edges)
+    12. [Subgraph of Ancestors of Y](#Subgraph-of-Ancestors-of-Y)
+    13. [Check D-Separation](#Check-D-Separation)
+    14. [Cut Incoming Edges](#Cut-Incoming-Edges)
+    15. [Cut Outgoing Edges](#Cut-Outgoing-Edges)
     16. [Generate Random Graph](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#generate-random-graph)
     17. [Check Inducing Paths](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-inducing-paths)
     18. [Check Inducing Paths with Unmeasured Variables](notion://www.notion.so/yonghanjung/5f9f7537439744b1aac2530f1455e5d7?v=f8bb0fa24c20449f91681ba2cffff136&p=5f4f0ef10d8e42f9a4c0fbd5b39ba5d2&pm=s#check-inducing-paths-with-unmeasured-variables)
@@ -360,7 +360,7 @@ print(ancestors)
 
 ```
 
-### Subgraph of Ancestors of Y
+## Subgraph of Ancestors of Y
 
 **Function:** `subgraph_ancestor_Y(G, Y)`
 
@@ -388,7 +388,7 @@ sub_G = subgraph_ancestor_Y(G, Y)
 
 ```
 
-### Check D-Separation
+## Check D-Separation
 
 **Function:** `is_d_separated(G, X, Y, Z)`
 
