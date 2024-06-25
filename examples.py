@@ -10,7 +10,7 @@ import mSBD
 import frontdoor
 
 
-def Random_Example_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False):
+def Random_Example_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False):
 	''' Random graph generator '''
 	store_graph = []
 	idx = 1 
@@ -18,7 +18,8 @@ def Random_Example_Generator(num_observables, num_unobservables, num_treatments,
 	
 	while 1: 
 		idx += 1 
-		[graph_dict, node_positions, X, Y] = graph.generate_random_graph(num_observables = 5, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, sparcity_constant = sparcity_constant)
+		print(idx)
+		[graph_dict, node_positions, X, Y] = graph.generate_random_graph(num_observables = num_observables, num_unobservables = num_unobservables, num_treatments = num_treatments, num_outcomes = num_outcomes, sparcity_constant = sparcity_constant)
 		# print(graph_dict, X, Y)
 		if graph_dict in store_graph:
 			continue
@@ -38,17 +39,22 @@ def Random_Example_Generator(num_observables, num_unobservables, num_treatments,
 					else:
 						satisfied_adjustment = adjustment.check_admissibility(G0, X0, Y0)
 						satisfied_mSBD = mSBD.constructive_SAC_criterion(G0, X0, Y0)
+						satisfied_FD = frontdoor.constructive_FD(G0, X0, Y0)
+						
 						if satisfied_adjustment == True:
 							if condition_BD == False:
 								continue
 							else:
 								return [graph_dict, node_positions, X, Y]		
 
-						# print("ho", condition_mSBD, mSBD.constructive_SAC_criterion(G0, X0, Y0))
-						# satisfied_mSBD = adjustment.check_admissibility(G0,X0,Y0)
-
 						if satisfied_mSBD == True:
 							if condition_mSBD == False:
+								continue
+							else:
+								return [graph_dict, node_positions, X, Y]		
+
+						if satisfied_FD == True:
+							if condition_FD == False:
 								continue
 							else:
 								return [graph_dict, node_positions, X, Y]		
@@ -502,6 +508,37 @@ def mSBD3():
 		"Y": [],
 	}
 	node_positions = None
+	X = ["X1", "X2"]
+	Y = ["Y"]
+	
+	return [graph_dict, node_positions, X, Y]
+
+def mSBD_minimum():
+	graph_dict = {
+		"U_X1Zb": ["X1","Zb"],
+		"U_X1Za": ["X1","Za"],
+		"U_ZaY": ["Za","Y"],
+		"U_ZcY": ["Zc","Y"],
+		"Zb": ["Zc", "Za"],
+		"Zc": ["Za"],
+		"Za": ["X2"],
+		"X1": ["Zb", "Za", "X2","Y"],
+		"X2": ["Y"],
+		"Y": []
+	}
+	node_positions = {
+		"U_X1Zb": (-40,-10),
+		"U_X1Za": (-38.13,-20.83),
+		"U_ZaY": (-30.39,-52.15),
+		"U_ZcY": (-24,-48),
+		"Zb": (-35,-17),
+		"Zc": (-25,-18),
+		"Za": (-34,-31),
+		"X1": (-45,-15),
+		"X2": (-32.65,-53.73),
+		"Y": (-32,-80)
+	}
+	# node_positions = None 
 	X = ["X1", "X2"]
 	Y = ["Y"]
 	

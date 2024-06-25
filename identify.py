@@ -555,17 +555,16 @@ def causal_identification(G,X,Y,latex = True):
 		print(message)
 		return print_estimand(causal_expression, latex)
 		
-
-	# if condition_FD:
-	# 	ZC = condition_FD.copy()
-	# 	Z = ZC['Z']
-	# 	C = ZC['C']
-	# 	message = f"{{{ZC}}} is FD admisslbe w.r.t. {X} and {set(Y)}"
-	# 	estimand = f" = {frontdoor.frontdoor_estimand(X,Y,Z,C,latex)}"
-	# 	print(message)
-	# 	if latex: 
-	# 		causal_expression += estimand
-	# 		return(causal_expression)
+	condition_FD = frontdoor.constructive_minimum_FD(G,X,Y)
+	if condition_FD:
+		ZC = condition_FD.copy()
+		Z = ZC['Z']
+		C = ZC['C']
+		message = f"{{{ZC}}} is FD admisslbe w.r.t. {X} and {set(Y)} in G"
+		estimand = f" = {frontdoor.frontdoor_estimand(X,Y,Z,C,latex)}"
+		causal_expression += estimand
+		print(message)
+		return print_estimand(causal_expression, latex)
 
 	
 	# Initialize dictionaries to hold the adjusted components and operations
@@ -608,12 +607,12 @@ def causal_identification(G,X,Y,latex = True):
 			if operation == "\u03A3": # \sum
 				if Q_W_mSBD_True_False: # Q[C] = \sum Q[W] where Q[W] is mSBD
 					dict_mSBD_TF[key].append(True) # Q[C] = \sum Q[W] where Q[W] is mSBD
-					# R = list(graph.find_parents(G, C))
-					# Q_C = mSBD.mSBD_estimand(G, R, C, latex)
+					R = list(graph.find_parents(G, C))
+					Q_C = mSBD.mSBD_estimand(G, R, C, latex)
 					
 					W = C.copy()
 					topo_W = list(graph.find_topological_order( graph.subgraphs(G, W) ))
-					Q_W = Q_C.copy()
+					Q_W = Q_C[:]
 					Q_Di[key].append(Q_C)
 					continue
 				else: # Q[C] = \sum Q[W], where Q[W] is non-mSBD
