@@ -21,12 +21,8 @@ The `graph.py` module provides functions for creating, manipulating, and visuali
     14. [Cut Incoming Edges](#Cut-Incoming-Edges)
     15. [Cut Outgoing Edges](#Cut-Outgoing-Edges)
     16. [Generate Random Graph](#Generate-Random-Graph)
-    17. [Check Inducing Paths](#Check-Inducing-Paths)
-    18. [Check Inducing Paths with Unmeasured Variables](#Check-Inducing-Paths-with-Unmeasured-Variables)
-    19. [Check if Node is Unmeasured](#Check-if-Node-is-Unmeasured)
-    20. [Find Variables with No Inducing Paths](#Find-Variables-with-No-Inducing-Paths)
-    21. [Reachable Set](#Reachable-Set)
-    22. [Convert Graph Dictionary to Fusion Graph](#Convert-Graph-Dictionary-to-Fusion-Graph)
+    17. [Reachable Set](#Reachable-Set)
+    18. [Convert Graph Dictionary to Fusion Graph](#Convert-Graph-Dictionary-to-Fusion-Graph)
 4. [Example Usage](#Example-Usage)
 
 ---
@@ -503,126 +499,6 @@ random_G = generate_random_graph(5, 2, 1, 1)
 
 ```
 
-## Check Inducing Paths
-
-**Function:** `check_inducing_paths(G, nodes1, nodes2, S, L)`
-
-**Description:** Check for inducing paths between two sets of nodes given sets `S` and `L`.
-
-**Parameters:**
-
-- `G` (nx.DiGraph): The graph to analyze.
-- `nodes1` (list): The first set of nodes.
-- `nodes2` (list): The second set of nodes.
-- `S` (list): The set of nodes S.
-- `L` (list): The set of nodes L.
-
-**Returns:**
-
-- `bool`: `True` if there are inducing paths, False otherwise.
-
-**Usage Example:**
-
-```python
-from graph import check_inducing_paths
-
-G = nx.DiGraph()
-G.add_edges_from([('T1', 'O1'), ('O1', 'Y'), ('U1', 'T1')])
-nodes1 = ['T1']
-nodes2 = ['Y']
-S = ['O1']
-L = ['U1']
-
-inducing_paths = check_inducing_paths(G, nodes1, nodes2, S, L)
-print(inducing_paths)
-
-```
-
-## Check Inducing Paths with Unmeasured Variables
-
-**Function:** `is_inducing_path_with_unmeasured(G, nodes1, nodes2)`
-
-**Description:** Check if there are inducing paths with unmeasured variables between two sets of nodes.
-
-**Parameters:**
-
-- `G` (nx.DiGraph): The graph to analyze.
-- `nodes1` (list): The first set of nodes.
-- `nodes2` (list): The second set of nodes.
-
-**Returns:**
-
-- `bool`: True if there are inducing paths with unmeasured variables, False otherwise.
-
-**Usage Example:**
-
-```python
-from graph import is_inducing_path_with_unmeasured
-
-G = nx.DiGraph()
-G.add_edges_from([('T1', 'O1'), ('O1', 'Y'), ('U1', 'T1')])
-nodes1 = ['T1']
-nodes2 = ['Y']
-
-inducing_paths = is_inducing_path_with_unmeasured(G, nodes1, nodes2)
-print(inducing_paths)
-
-```
-
-## Check if Node is Unmeasured
-
-**Function:** `is_unmeasured(node)`
-
-**Description:** Check if a node is unmeasured.
-
-**Parameters:**
-
-- `node` (str): The node to check.
-
-**Returns:**
-
-- `bool`: True if the node is unmeasured, False otherwise.
-
-**Usage Example:**
-
-```python
-from graph import is_unmeasured
-
-node = 'U1'
-unmeasured = is_unmeasured(node)
-print(unmeasured)
-
-```
-
-## Find Variables with No Inducing Paths
-
-**Function:** `find_variables_no_inducing_path(G, nodes)`
-
-**Description:** Find variables that have no inducing paths to the given nodes.
-
-**Parameters:**
-
-- `G` (nx.DiGraph): The graph to analyze.
-- `nodes` (list): The list of nodes to check for inducing paths.
-
-**Returns:**
-
-- `list`: A list of variables with no inducing paths.
-
-**Usage Example:**
-
-```python
-from graph import find_variables_no_inducing_path
-
-G = nx.DiGraph()
-G.add_edges_from([('T1', 'O1'), ('O1', 'Y'), ('U1', 'T1')])
-nodes = ['Y']
-
-no_inducing_path_vars = find_variables_no_inducing_path(G, nodes)
-print(no_inducing_path_vars)
-
-```
-
 ## Reachable Set
 
 **Function:** `reacheable_set(G, X, A, Z)`
@@ -692,7 +568,7 @@ fusion_graph = graph_dict_to_fusion_graph(graph_dict)
 
 ```python
 import networkx as nx
-from graph import visualize, write_joint_distribution, find_topological_order, create_acyclic_graph, all_possible_orders_X, subgraphs, list_all_c_components, find_c_components, find_parents, find_descendant, find_ancestor, subgraph_ancestor_Y, is_d_separated, G_cut_incoming_edges, G_cut_outgoing_edges, generate_random_graph, check_inducing_paths, is_inducing_path_with_unmeasured, is_unmeasured, find_variables_no_inducing_path, reacheable_set, graph_dict_to_fusion_graph
+from graph import visualize, write_joint_distribution, find_topological_order, create_acyclic_graph, all_possible_orders_X, subgraphs, list_all_c_components, find_c_components, find_parents, find_descendant, find_ancestor, subgraph_ancestor_Y, is_d_separated, G_cut_incoming_edges, G_cut_outgoing_edges, generate_random_graph, reacheable_set, graph_dict_to_fusion_graph
 
 # Define a graph dictionary
 graph_dict = {
@@ -760,22 +636,6 @@ modified_G = G_cut_outgoing_edges(G, ['T1'])
 
 # Generate a random graph
 random_G = generate_random_graph(5, 2, 1, 1)
-
-# Check inducing paths
-inducing_paths = check_inducing_paths(G, ['T1'], ['Y'], ['O1'], ['U1'])
-print(inducing_paths)
-
-# Check inducing paths with unmeasured variables
-inducing_paths = is_inducing_path_with_unmeasured(G, ['T1'], ['Y'])
-print(inducing_paths)
-
-# Check if a node is unmeasured
-unmeasured = is_unmeasured('U1')
-print(unmeasured)
-
-# Find variables with no inducing paths
-no_inducing_path_vars = find_variables_no_inducing_path(G, ['Y'])
-print(no_inducing_path_vars)
 
 # Find reachable set
 reachable_nodes = reacheable_set(G, ['T1'], ['O1'], ['Y'])

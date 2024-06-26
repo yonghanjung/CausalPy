@@ -21,9 +21,6 @@ def constructive_FD(G, X, Y):
 	U_set = set([n for n in G.nodes() if n.startswith('U')])
 	Z_i = V - U_set  - set(Y) - set(X) - set(graph.find_parents(graph.G_cut_outgoing_edges(G,X),X)) - set( graph.find_c_components(graph.G_cut_outgoing_edges(G,X),X) )
 
-	# Z_i = V - U_set
-	# Z_i = list( set( graph.find_variables_no_inducing_path(graph.G_cut_outgoing_edges(G,X),X) ) - set(Y) - set(X) - set( graph.find_c_components(G,X) ) )
-	# Z_i = bayes_ball_search(G, X, Z)
 	visited = {v: {'inc': False, 'out': False} for v in V}
 	continue_later = {v: False for v in V}
 	forbidden = {v: (v not in Z_i) for v in V} 
@@ -83,16 +80,8 @@ def constructive_minimum_FD(G, X, Y):
 	
 	def get_parents_and_paths_to_Y(Z_ii, Y, G):
 		# Get parents and nodes with paths to Y
-		Z_An = set()
-		for v in Z_ii:
-			if any((v in G.predecessors(y) for y in Y)):
-				Z_An.add(v)
-			for y in Y:
-				if nx.has_path(G, v, y):
-					path = nx.shortest_path(G, source=v, target=y)
-					if not any(node in X or node in Z_ii for node in path[1:-1]):
-						Z_An.add(v)
-		return Z_An
+		return set(graph.find_ancestor(G,Y)).intersection(set(Z_ii))
+
 	
 	def get_nodes_with_paths_to_X(Z_An, X, G):
 		# Get nodes with paths to X

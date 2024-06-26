@@ -402,105 +402,6 @@ def generate_random_graph(num_observables, num_unobservables, num_treatments, nu
 
 	return [graph_dict, node_positions, treatments, outcomes]
 
-
-def check_inducing_paths(G, nodes1, nodes2, S, L):
-	'''
-	Check if there is an inducing path between node1 and node2 in G, given conditioning set S and the marginalized set L.
-
-	Parameters:
-	G (nx.DiGraph): The original directed graph.
-	nodes1 (list)
-	nodes2 (list)
-	S (list)
-	L (list)
-	'''
-	# def check_inducing_path(path):
-	# 	''' Check if the path is valid considering colliders and non-colliders. '''
-	# 	for i in range(1, len(path) - 1):
-	# 		node = path[i]
-	# 		is_collider = G.has_edge(path[i-1], node) and G.has_edge(path[i+1], node)
-	# 		if not is_collider: # If a node is not a collder, 
-	# 			if node not in L: #... it must be in L 
-	# 				return False 
-	# 		else: # If a node is a collider, 
-	# 			if node not in list(find_ancestor(G,S) + S):
-	# 				return False 
-	# 	return True 
-
-	def is_inducing_node(node, prev_node, next_node):
-		is_collider = G.has_edge(prev_node, node) and G.has_edge(next_node, node)
-		if is_collider:
-			return node in list(find_ancestor(G,S) + S)
-		else:
-			return node in L
-
-	# Convert G to undirected for path finding
-	undirected_G = G.to_undirected()
-
-	# Check paths between each pair of start and end nodes
-	for start in nodes1:
-		for end in nodes2:
-			if start != end:
-				# Perform a BFS from the start node to find paths to the end node
-				queue = [(start, [start])]
-				while queue:
-					(current_node, path) = queue.pop(0)
-					if current_node == end:
-						if all(is_inducing_node(path[i], path[i-1], path[i+1]) for i in range(1, len(path) - 1)):
-							return True
-					for neighbor in undirected_G[current_node]:
-						if neighbor not in path:
-							queue.append((neighbor, path + [neighbor]))
-
-
-	# for start in nodes1:
-	# 	for end in nodes2:
-	# 		if start != end:
-	# 			all_paths = nx.all_simple_paths(undirected_G, source=start, target=end)
-	# 			for path in all_paths:
-	# 				if is_valid_path(path):
-	# 					return True
-
-	return False
-
-
-def is_inducing_path_with_unmeasured(G, nodes1, nodes2):
-	# Define L as the set of unmeasured (unobserved) variables in the graph
-	# Assuming unmeasured variables are not in a specific list or have a specific naming pattern
-	# Adjust this line based on how unmeasured variables are represented in your graph
-	L = {node for node in G.nodes() if is_unmeasured(node)}
-
-	# Call the existing is_inducing_path function with S as an empty set
-	if check_inducing_paths(G, nodes1, nodes2, S=[], L=L):
-		return True
-
-	return False
-
-def is_unmeasured(node):
-	# Define how to determine if a node is unmeasured
-	# This is a placeholder function, implement according to your graph's characteristics
-	return node.startswith('U')
-
-def find_variables_no_inducing_path(G, nodes):
-	'''
-	Given a set of variables "nodes", find all other variables that has no inducing path to "nodes". 
-
-	Parameters:
-	G (nx.DiGraph): The original directed graph.
-	nodes (list)
-	'''
-
-	V = [node for node in nx.topological_sort(G) if not node.startswith('U')]
-	V_minus_nodes = list(set(V) - set(nodes))
-	list_variables = []
-
-	for Vi in V_minus_nodes:
-		# print(Vi, [Vi])
-		if not is_inducing_path_with_unmeasured(G,[Vi],nodes):
-			list_variables.append(Vi)
-	return list_variables
-
-
 def find_reacheable_set(G, X, A, Z):
 	'''
 	Find the subset of A that is reachable from X conditioned on Z.
@@ -550,35 +451,7 @@ def find_reacheable_set(G, X, A, Z):
 	
 	return list(closure.union(X_set))
 
-def bayes_ball_search(G, X, Z):
-	'''
-	Perform Bayes-Ball Search to find the set of vertices d-connected to X given Z in G.
-	
-	G : NetworkX DiGraph (Directed Acyclic Graph)
-	X : list of source nodes
-	Z : list of conditioning nodes
-	'''
-	X = set(X)
-	Z = set(Z)
-	V = set(G.nodes())
-	visited = {v: {'inc': False, 'out': False} for v in V}
-	
-	def visit(G, V, edgetype):
-		visited[V][edgetype] = True
-		if V not in Z:
-			for W in G.successors(V):  # Children of V
-				if not visited[W]['inc']:
-					visit(G, W, 'inc')
-		if (edgetype == 'inc' and V in Z) or (edgetype == 'out' and V not in Z):
-			for W in G.predecessors(V):  # Parents of V
-				if not visited[W]['out']:
-					visit(G, W, 'out')
-	
-	for X_node in X:
-		if not visited[X_node]['out']:
-			visit(G, X_node, 'out')
-	
-	return list({v for v in V if visited[v]['inc'] or visited[v]['out']})
+
 
 def graph_dict_to_fusion_graph(graph_dict):
 	'''

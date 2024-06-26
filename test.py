@@ -9,9 +9,9 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.Tikka2() 
 	# [graph_dict, node_positions, X, Y] = examples.FD0() 
 	# [graph_dict, node_positions, X, Y] = examples.FD1() 
-	# [graph_dict, node_positions, X, Y] = examples.FD2() # answer: {A,B,C,D}, minimal = {D}
+	# [graph_dict, node_positions, X, Y] = examples.FD2() # answer: {A,B,C,D}, minimal = {D} or {A}
 	# [graph_dict, node_positions, X, Y] = examples.FD3() # answer: {A,B,C,D}, minimal = {A}
-	# [graph_dict, node_positions, X, Y] = examples.FD4() # answer: {A,B,C,D,E}, minimal = {BDE} or Z={B}, C={DE}
+	# [graph_dict, node_positions, X, Y] = examples.FD4() # answer: {A,B,C,D,E}, minimal = {BDE} or {ADE} | Z={B} or {A}, C={DE}
 	# [graph_dict, node_positions, X, Y] = examples.FD5() # answer: {A,B,D}, minimal = {A,D} or Z={A}, C={D}
 	# [graph_dict, node_positions, X, Y] = examples.BD_vdZ() 
 	# [graph_dict, node_positions, X, Y] = examples.BD_minimum() 
@@ -33,7 +33,7 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.unID2() 
 
 	# Generate the random graph 
-	[graph_dict, node_positions, X, Y] = examples.Random_Example_Generator(num_observables = 10, num_unobservables = 5, num_treatments = 1, num_outcomes = 1, 
+	[graph_dict, node_positions, X, Y] = examples.Random_Example_Generator(num_observables = 30, num_unobservables = 20, num_treatments = 1, num_outcomes = 1, 
 																			condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = True)
 	
 	# Copy the graph for comparing with Fusion
