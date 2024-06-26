@@ -48,6 +48,8 @@ def constructive_FD(G, X, Y):
 			visit(G, Y_node, 'out')
 	
 	Z_ii = list( V - {v for v in V if forbidden[v]} )
+	if len(Z_ii) == 0:
+		return False
 	C = set( adjustment.construct_minimum_adjustment_set(G,X,Z_ii) ) - set(X) - set(Y)
 	CX = list(set(X).union(set(C)))
 	condition1 = graph.is_d_separated(graph.G_cut_outgoing_edges(G, X), X, Z_ii, C)
@@ -57,6 +59,7 @@ def constructive_FD(G, X, Y):
 		CZ_dict = {"Z": Z_ii, "C": list(C)}
 		return CZ_dict
 	return False 
+
 
 def constructive_minimum_FD(G, X, Y):
 	'''
@@ -78,38 +81,47 @@ def constructive_minimum_FD(G, X, Y):
 	R = set([node for node in nx.topological_sort(G) if not node.startswith('U')])
 	I = set(ZC['C'])
 	
-	def get_parents_and_paths_to_Y(Z_ii, Y, G):
+	def get_parents_and_paths_to_Y(G, Z_ii, Y):
 		# Get parents and nodes with paths to Y
-		return set(graph.find_ancestor(G,Y)).intersection(set(Z_ii))
-
+		ZAn_candidates = set(graph.find_ancestor(G,Y)).intersection(set(Z_ii))
+		Z_An = set()
+		parents_Y = set(graph.find_parents(G, Y))
+		for v in ZAn_candidates:
+			if v in parents_Y:
+				Z_An.add(v)
+				continue
+			exclude_nodes = set(X).union(Z_ii - {v})
+			for y in Y:
+				inbetween = set(graph.find_ancestor(G,[y])).intersection(set(graph.find_descendant(G,[v])))
+				if len(inbetween.intersection(exclude_nodes)) == 0:
+					Z_An.add(v)
+					continue
+		return Z_An
 	
-	def get_nodes_with_paths_to_X(Z_An, X, G):
+	def get_nodes_with_paths_to_X(G, Z_An, X):
+		# return set(graph.find_descendant(G,X)).intersection(set(Z_An))
 		# Get nodes with paths to X
+		Z_XY_candidates = set(graph.find_descendant(G,X)).intersection(set(Z_An))
 		Z_XY = set()
 		for v in Z_An:
+			exclude_nodes = set(Z_An) - {v}
 			for x in X:
 				if nx.has_path(G, x, v):
-					path = nx.shortest_path(G, source=x, target=v)
-					if not any(node in I or node in Z_An for node in path[1:-1]):
+					inbetween = set(graph.find_ancestor(G,[v])).intersection(set(graph.find_descendant(G,[x])))
+					if len(inbetween.intersection(exclude_nodes)) == 0:
 						Z_XY.add(v)
+						continue
 		return Z_XY
 	
-	def get_BD_paths(G, Z_XY, I):
-		# Get nodes with back-door paths
-		Z_ZY = set()
-		for v in Z_XY:
-			for u in I:
-				if nx.has_path(G, u, v):
-					path = nx.shortest_path(G, source=u, target=v)
-					if not any(node in X for node in path[1:-1]) and all(nx.has_path(G, v, z) for z in path[1:-1] if nx.has_path(G, z, v)):
-						Z_ZY.add(v)
-		return Z_ZY
-	
 	# Step 2: Compute Z_An
-	Z_An = get_parents_and_paths_to_Y(Z_ii, Y, G)
+	Z_An = get_parents_and_paths_to_Y(G, Z_ii, Y)
+	if len(Z_An) == 0:
+		Z_An = Z_ii
 	
 	# Step 3: Compute Z_XY
-	Z_min = get_nodes_with_paths_to_X(Z_An, X, G)
+	Z_min = get_nodes_with_paths_to_X(G, Z_An, X)
+	if len(Z_min) == 0:
+		Z_min = Z_An
 
 	C_min = list(set( adjustment.construct_minimum_adjustment_set(G,Z_min,Y) ) - set(X) - set(Y))
 	

@@ -33,8 +33,8 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.unID2() 
 
 	# Generate the random graph 
-	[graph_dict, node_positions, X, Y] = examples.Random_Example_Generator(num_observables = 30, num_unobservables = 20, num_treatments = 1, num_outcomes = 1, 
-																			condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = True)
+	[graph_dict, node_positions, X, Y] = examples.Random_Example_Generator(num_observables = 6, num_unobservables = 4, num_treatments = 1, num_outcomes = 1, 
+																			condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False)
 	
 	# Copy the graph for comparing with Fusion
 	pyperclip.copy(graph.graph_dict_to_fusion_graph(graph_dict))
