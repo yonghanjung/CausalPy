@@ -9,6 +9,7 @@ import adjustment
 import identify
 import mSBD
 import frontdoor
+import tian
 
 def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False):
 	scm = SCM.StructuralCausalModel()
@@ -50,18 +51,23 @@ def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num
 
 				return [scm, X, Y]		
 
-def Random_Example_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False):
+def Random_Example_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False, condition_Tian = False, condition_gTian = False):
 	''' Random graph generator '''
 	store_graph = []
+	ID_store_graph = []
 	idx = 1 
+	same_graph_idx = 1
 	sparcity_constant = 0.75
 	
 	while 1: 
-		idx += 1 
-		print(idx)
 		[graph_dict, node_positions, X, Y] = graph.generate_random_graph(num_observables = num_observables, num_unobservables = num_unobservables, num_treatments = num_treatments, num_outcomes = num_outcomes, sparcity_constant = sparcity_constant)
 		# print(graph_dict, X, Y)
 		if graph_dict in store_graph:
+			print("already checked", same_graph_idx)
+			same_graph_idx += 1 
+			if same_graph_idx > 1000:
+				print("Cannot find a graph with given conditions")
+				break 
 			continue
 		else:
 			store_graph.append(graph_dict)
@@ -77,32 +83,41 @@ def Random_Example_Generator(num_observables, num_unobservables, num_treatments,
 					if ID_result[0] == -1: 
 						continue
 					else:
+						ID_store_graph.append(graph_dict)
+						idx += 1 
+						print(idx, len(ID_store_graph))
+
 						satisfied_adjustment = adjustment.check_admissibility(G0, X0, Y0)
 						satisfied_mSBD = mSBD.constructive_SAC_criterion(G0, X0, Y0)
 						satisfied_FD = frontdoor.constructive_FD(G0, X0, Y0)
+						satisfied_Tian = tian.check_Tian_criterion(G0,X0)
+						satisfied_gTian = tian.check_Generalized_Tian_criterion(G0,X0)
 
-						if condition_BD == True:
-							if satisfied_adjustment:
-								return [graph_dict, node_positions, X, Y]		
-							else: 
-								continue 
+						# Create a dictionary to map conditions to their satisfaction checks
+						condition_checks = {
+							"condition_BD": satisfied_adjustment,
+							"condition_mSBD": satisfied_mSBD,
+							"condition_FD": satisfied_FD,
+							"condition_Tian": satisfied_Tian,
+							"condition_gTian": satisfied_gTian
+						}
 
-						if condition_mSBD == True:
-							if satisfied_mSBD == True:
-								return [graph_dict, node_positions, X, Y]		
-							else: 
-								continue
+						# Check if all specified conditions are satisfied
+						all_conditions_met = True
+						for condition, satisfied in condition_checks.items():
+							condition_value = eval(condition)
+							if condition_value and not satisfied:
+								all_conditions_met = False
+								break
+							if not condition_value and satisfied:
+								all_conditions_met = False
+								break
 
-						if condition_FD == True:
-							if satisfied_FD == True:
-								return [graph_dict, node_positions, X, Y]		
-							else: 
-								continue
+						if all_conditions_met:
+							return [graph_dict, node_positions, X, Y]
 
-						return [graph_dict, node_positions, X, Y]		
-		
 
-def Tian():
+def Tian1():
 	graph_dict = {
 		"U_V1X": ["V1","X"],
 		"U_V1V3": ["V1","V3"],
@@ -486,7 +501,7 @@ def mSBD2():
 	graph_dict = {
 		"U_Z1Y2": ["Z1","Y2"],
 		"U_Y1X2": ["Y1","X2"],
-  		"U_X1X2": ["X1","X2"],
+		"U_X1X2": ["X1","X2"],
 		"Z1": ["X1","Z2","Y1"],
 		"X1": ["Y1"],
 		"Y1": ["Z2","X2"],
@@ -497,7 +512,7 @@ def mSBD2():
 	node_positions = {
 		"U_Z1Y2": (-450,100),
 		"U_Y1X2": (-450,0),
-  		"U_X1X2": (-300,0),
+		"U_X1X2": (-300,0),
 		"Z1": (-630,90),
 		"X1": (-690,30),
 		"Y1": (-570,30),
@@ -515,7 +530,7 @@ def mSBD3():
 	graph_dict = {
 		"U_Z1X1": ["Z1","X1"],
 		"U_Z1Z2": ["Z1","Z2"],
-  		"U_Z3Y": ["Z3","Y"],
+		"U_Z3Y": ["Z3","Y"],
 		"X1": ["Z1","X2", "Y"],
 		"Z1": ["X2"],
 		"X2": ["Z2","Y"],

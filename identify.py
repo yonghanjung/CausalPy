@@ -6,6 +6,7 @@ import adjustment
 import mSBD
 import graph
 import frontdoor
+import tian
 import plotly.graph_objects as go
 
 def preprocess_GXY_for_ID(G, X, Y):
@@ -555,13 +556,32 @@ def causal_identification(G,X,Y,latex = True):
 		print(message)
 		return print_estimand(causal_expression, latex)
 		
+	# Check if P(Y | do(x)) can be estimated through the FD
 	condition_FD = frontdoor.constructive_minimum_FD(G,X,Y)
 	if condition_FD:
 		ZC = condition_FD.copy()
 		Z = ZC['Z']
 		C = ZC['C']
-		message = f"{{{ZC}}} is FD admisslbe w.r.t. {X} and {set(Y)} in G"
+		message = f"{{{ZC}}} is FD admisslbe w.r.t. {X} and {Y} in G"
 		estimand = f" = {frontdoor.frontdoor_estimand(X,Y,Z,C,latex)}"
+		causal_expression += estimand
+		print(message)
+		return print_estimand(causal_expression, latex)
+
+	# Check if P(Y | do(x)) can be estimated through the Tian's adjustment
+	condition_Tian = tian.check_Tian_criterion(G, X)
+	if condition_Tian:
+		message = f"Tian's adjustment is satisfied w.r.t. {X} and {Y} in G"
+		estimand = f" = {tian.Tian_estimand(G, X, Y, latex, topo_V = None)}"
+		causal_expression += estimand
+		print(message)
+		return print_estimand(causal_expression, latex)
+
+	# Check if P(Y | do(x)) can be estimated through the Generalized Tian's adjustment
+	condition_generalized_Tian = tian.check_Generalized_Tian_criterion(G, X)
+	if condition_generalized_Tian:
+		message = f"Generalized Tian's adjustment is satisfied w.r.t. {X} and {Y} in G"
+		estimand = f" = {tian.generalized_Tian_estimand(G, X, Y, latex, topo_V = None)}"
 		causal_expression += estimand
 		print(message)
 		return print_estimand(causal_expression, latex)

@@ -247,6 +247,26 @@ def find_parents(G, C):
 	parents = {node for node in parents if not node.startswith('U') and node not in C}
 	return list(parents)
 
+def find_children(G, C):
+    """
+    Identify the children of nodes in C in the directed graph G.
+
+    Parameters:
+    G (nx.DiGraph): The directed graph.
+    C (list): Nodes whose children are to be found.
+
+    Returns:
+    set: A set of children nodes of the nodes in C.
+    """
+    children = set()
+    for node in C:
+        if node in G:
+            children.update(G.successors(node))
+    # Filter out latent variables and add component if not empty
+    children = {node for node in children if not node.startswith('U') and node not in C}
+    return list(children)
+
+
 
 def find_descendant(G, nodes):
 	'''
