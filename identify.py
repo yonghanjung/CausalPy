@@ -491,7 +491,7 @@ def causal_identification(G,X,Y,latex = True):
 		if len(R) == 0:
 			Q_W = graph.write_joint_distribution( topo_W )
 		else:
-			Q_W = mSBD.mSBD_estimand(G, R, topo_W, latex)
+			Q_W = mSBD.mSBD_estimand(G, R, topo_W, latex, True)
 		return Q_W
 
 	def print_estimand(causal_expression, latex):
@@ -608,7 +608,7 @@ def causal_identification(G,X,Y,latex = True):
 				if Q_W_mSBD_True_False: # Q[C] = \sum Q[W] where Q[W] is mSBD
 					dict_mSBD_TF[key].append(True) # Q[C] = \sum Q[W] where Q[W] is mSBD
 					R = list(graph.find_parents(G, C))
-					Q_C = mSBD.mSBD_estimand(G, R, C, latex)
+					Q_C = mSBD.mSBD_estimand(G, R, C, latex, True)
 					
 					W = C.copy()
 					topo_W = list(graph.find_topological_order( graph.subgraphs(G, W) ))
@@ -635,7 +635,7 @@ def causal_identification(G,X,Y,latex = True):
 					W_minus_C = list(set(W).difference(set(C)))
 					R = list(graph.find_parents(G, W_minus_C))
 					if mSBD.constructive_SAC_criterion(G, R, W_minus_C): # if Q[W\C] is mSBD
-						Q_W_C = mSBD.mSBD_estimand(G, R, W_minus_C, latex)
+						Q_W_C = mSBD.mSBD_estimand(G, R, W_minus_C, latex, True)
 						if not latex:
 							Q_C = f"[[{Q_W}]/[{Q_W_C}]]"
 						else:
@@ -654,7 +654,7 @@ def causal_identification(G,X,Y,latex = True):
 							# Q[W1,...,W{i}]
 							W_1_to_i = list(set(W).difference(set(Wi1_to_Wm)))
 							R_W_1_to_i = list(graph.find_parents(G, W_1_to_i))
-							numerator = mSBD.mSBD_estimand(G, R_W_1_to_i, W_1_to_i, latex)
+							numerator = mSBD.mSBD_estimand(G, R_W_1_to_i, W_1_to_i, latex, True)
 							# Q[W1,...,W{i-1}]
 							W_1_to_i1 = list(set(W).difference(set(Wi_to_Wm))) 
 							if len(W_1_to_i1) == 0:
@@ -662,7 +662,7 @@ def causal_identification(G,X,Y,latex = True):
 								Q_C_component.append(Q_C_component_element)
 							else:
 								R_W_1_to_i1 = list(graph.find_parents(G, W_1_to_i1))
-								denominator = mSBD.mSBD_estimand(G, R_W_1_to_i1, W_1_to_i1, latex)
+								denominator = mSBD.mSBD_estimand(G, R_W_1_to_i1, W_1_to_i1, latex, True)
 								if not latex: 
 									Q_C_component_element = f"[({numerator}) / ({denominator})]"
 								else:

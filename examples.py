@@ -4,11 +4,51 @@ import numpy as np
 import random 
 
 import graph
+import SCM
 import adjustment
 import identify
 import mSBD
 import frontdoor
 
+def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False):
+	scm = SCM.StructuralCausalModel()
+	
+	while 1:
+		scm.generate_random_scm_test(num_observables, num_unobservables, num_treatments, num_outcomes)
+		G = scm.graph
+		X = [v for v in G.nodes if v.startswith('X')]
+		Y = [v for v in G.nodes if v.startswith('Y')]
+		G0, X0, Y0 = identify.preprocess_GXY_for_ID(G, X, Y)
+		ID_result = identify.ID_return_Ctree(G, X, Y)
+		if ID_result[0] == False: 
+			continue 
+		else: 
+			if ID_result[0] == -1: 
+				continue
+			else:
+				satisfied_adjustment = adjustment.check_admissibility(G0, X0, Y0)
+				satisfied_mSBD = mSBD.constructive_SAC_criterion(G0, X0, Y0)
+				satisfied_FD = frontdoor.constructive_FD(G0, X0, Y0)
+				
+				if condition_BD == True:
+					if satisfied_adjustment:
+						return [scm, X, Y]		
+					else: 
+						continue 
+
+				if condition_mSBD == True:
+					if satisfied_mSBD == True:
+						return [scm, X, Y]		
+					else: 
+						continue
+
+				if condition_FD == True:
+					if satisfied_FD == True:
+						return [scm, X, Y]		
+					else: 
+						continue
+
+				return [scm, X, Y]		
 
 def Random_Example_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False):
 	''' Random graph generator '''
@@ -40,25 +80,25 @@ def Random_Example_Generator(num_observables, num_unobservables, num_treatments,
 						satisfied_adjustment = adjustment.check_admissibility(G0, X0, Y0)
 						satisfied_mSBD = mSBD.constructive_SAC_criterion(G0, X0, Y0)
 						satisfied_FD = frontdoor.constructive_FD(G0, X0, Y0)
-						
-						if satisfied_adjustment == True:
-							if condition_BD == False:
-								continue
-							else:
-								return [graph_dict, node_positions, X, Y]		
 
-						if satisfied_mSBD == True:
-							if condition_mSBD == False:
-								continue
-							else:
+						if condition_BD == True:
+							if satisfied_adjustment:
 								return [graph_dict, node_positions, X, Y]		
+							else: 
+								continue 
 
-						if satisfied_FD == True:
-							if condition_FD == False:
-								continue
-							else:
+						if condition_mSBD == True:
+							if satisfied_mSBD == True:
 								return [graph_dict, node_positions, X, Y]		
-						
+							else: 
+								continue
+
+						if condition_FD == True:
+							if satisfied_FD == True:
+								return [graph_dict, node_positions, X, Y]		
+							else: 
+								continue
+
 						return [graph_dict, node_positions, X, Y]		
 		
 
@@ -80,7 +120,7 @@ def Tian():
 	}
 	node_positions = {
 		"U_V1X": (90,210),
-		"U_V1V3": (270,270),
+		"U_V1V3": (291,277),
 		"U_V2V3": (240,180),
 		"U_V3V5": (330,180),
 		"U_V4V5": (300,90),
@@ -418,30 +458,6 @@ def Napkin():
 	return [graph_dict, node_positions, X, Y]
 
 
-def FD1():
-	graph_dict = {
-		"U_CX": ["C","X"],
-		"U_CY": ["C","Y"],
-		"U_XY": ["X", "Y"],
-		"C": ["X","Z","Y"],
-		"X": ["Z"],
-		"Z": ["Y"],
-		"Y": []
-	}
-	node_positions = {
-		"U_CX": (50,50),
-		"U_CY": (150,50),
-		"C": (100,50),
-		"X": (0,0),
-		"Z": (100,0),
-		"Y": (200,0),
-		"U_XY": (100,-25)
-	}
-	X = ["X"]
-	Y = ["Y"]
-	
-	return [graph_dict, node_positions, X, Y]
-
 def mSBD1():
 	graph_dict = {
 		"U_X1Z": ["X1","Z"],
@@ -616,6 +632,30 @@ def FD0():
 	
 	return [graph_dict, node_positions, X, Y]
 
+def FD1():
+	graph_dict = {
+		"U_CX": ["C","X"],
+		"U_CY": ["C","Y"],
+		"U_XY": ["X", "Y"],
+		"C": ["X","Z","Y"],
+		"X": ["Z"],
+		"Z": ["Y"],
+		"Y": []
+	}
+	node_positions = {
+		"U_CX": (50,50),
+		"U_CY": (150,50),
+		"C": (100,50),
+		"X": (0,0),
+		"Z": (100,0),
+		"Y": (200,0),
+		"U_XY": (100,-25)
+	}
+	X = ["X"]
+	Y = ["Y"]
+	
+	return [graph_dict, node_positions, X, Y]
+
 def FD2():
 	graph_dict = {
 		"U_XY": ["X", "Y"],
@@ -718,6 +758,92 @@ def FD5():
 	X = ["X"]
 	Y = ["Y"]
 		
+	return [graph_dict, node_positions, X, Y]
+
+def UCA1():
+	graph_dict = {
+		"U_CX2": ["C","X2"],
+		"U_CY": ["C","Y"],
+		"U_X1X2": ["X1","X2"],
+		"U_X2Y": ["X2", "Y"],
+		"C": ["X1","X2","Z","Y"],
+		"X1": ["X2","Z","Y"],
+		"X2": ["Z"],
+		"Z": ["Y"],
+		"Y": []
+	}
+	node_positions = {
+		"U_CX2": (50,50),
+		"U_X1X2": (-57,7),
+		"U_CY": (150,50),
+		"C": (100,50),
+		"X1": (-50,25),
+		"X2": (0,0),
+		"Z": (100,0),
+		"Y": (200,0),
+		"U_X2Y": (100,-25)
+	}
+	X = ["X1","X2"]
+	Y = ["Y"]
+	
+	return [graph_dict, node_positions, X, Y]
+
+def UCA2():
+	graph_dict = {
+		# "U_CX2": ["C","X2"],
+		"U_CY": ["C","Y"],
+		"U_X1X2": ["X1","X2"],
+		"U_X2Y": ["X2", "Y"],
+		"C": ["X1","Y"],
+		"X1": ["X2","Z","Y"],
+		"X2": ["Z"],
+		"Z": ["Y"],
+		"Y": []
+	}
+	node_positions = {
+		# "U_CX2": (50,50),
+		"U_X1X2": (-57,7),
+		"U_CY": (150,50),
+		"C": (100,50),
+		"X1": (-50,25),
+		"X2": (0,0),
+		"Z": (100,0),
+		"Y": (200,0),
+		"U_X2Y": (100,-25)
+	}
+	X = ["X1","X2"]
+	Y = ["Y"]
+	
+	return [graph_dict, node_positions, X, Y]
+		
+def Rina1():
+	graph_dict = {
+		"U_CX1": ["C","X1"],
+		"U_X1B": ["X1","B"],
+		"U_BY": ["B", "Y"],
+		"C": ["A","X2"],
+		"X1": ["A"],
+		"A": ["B"],
+		"B": ["D"],
+		"X2": ["D"],
+		"D": ["Y"],
+		"Y": []
+	}
+	node_positions = None
+	# node_positions = {
+	# 	# "U_CX2": (50,50),
+	# 	"U_X1X2": (-57,7),
+	# 	"U_CY": (150,50),
+	# 	"C": (100,50),
+	# 	"X1": (-50,25),
+	# 	"X2": (0,0),
+	# 	"Z": (100,0),
+	# 	"Y": (200,0),
+	# 	"U_X2Y": (100,-25)
+	# }
+	X = ["X1","X2"]
+	Y = ["Y"]
+	
 	return [graph_dict, node_positions, X, Y]
 
 def unID1():

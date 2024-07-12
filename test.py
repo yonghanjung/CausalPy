@@ -2,6 +2,10 @@ import pyperclip
 import graph
 import identify
 import examples
+import SCM 
+import adjustment
+import frontdoor
+import mSBD
 
 if __name__ == "__main__":
 	''' Predefined examples '''
@@ -13,6 +17,8 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.FD3() # answer: {A,B,C,D}, minimal = {A}
 	# [graph_dict, node_positions, X, Y] = examples.FD4() # answer: {A,B,C,D,E}, minimal = {BDE} or {ADE} | Z={B} or {A}, C={DE}
 	# [graph_dict, node_positions, X, Y] = examples.FD5() # answer: {A,B,D}, minimal = {A,D} or Z={A}, C={D}
+	# [graph_dict, node_positions, X, Y] = examples.UCA1() 
+	# [graph_dict, node_positions, X, Y] = examples.UCA2() 
 	# [graph_dict, node_positions, X, Y] = examples.BD_vdZ() 
 	# [graph_dict, node_positions, X, Y] = examples.BD_minimum() 
 	# [graph_dict, node_positions, X, Y] = examples.BD_minimum2() 
@@ -31,26 +37,37 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.Chris_FD1() 
 	# [graph_dict, node_positions, X, Y] = examples.unID1() 
 	# [graph_dict, node_positions, X, Y] = examples.unID2() 
+	[graph_dict, node_positions, X, Y] = examples.Rina1() 
 
+	
 	# Generate the random graph 
-	[graph_dict, node_positions, X, Y] = examples.Random_Example_Generator(num_observables = 6, num_unobservables = 4, num_treatments = 1, num_outcomes = 1, 
-																			condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False)
-	
-	# Copy the graph for comparing with Fusion
-	pyperclip.copy(graph.graph_dict_to_fusion_graph(graph_dict))
-	
-	# Get the graph from the graph_dict
+	# [graph_dict, node_positions, X, Y] = examples.Random_Example_Generator(num_observables = 6, num_unobservables = 5, num_treatments = 2, num_outcomes = 1, 
+	# 																		condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False)
 	G = graph.create_acyclic_graph(graph_dict=graph_dict, an_Y_graph_TF = False, Y = None, node_positions = node_positions)
 	
+
+	# Generate the random SCM 
+	# [scm, X, Y] = examples.Random_SCM_Generator(num_observables = 6, num_unobservables = 5, num_treatments = 2, num_outcomes = 1, 
+	# 										condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False)
+	# sample_data = scm.generate_samples(10000)
+	# print(sample_data)
+	# G = scm.graph
+	
+
 	# Visualize the graph 
-	graph.visualize(G)
+	# graph.visualize(G)
+	
 
 	# Identify the causal effect P(Y | do(X)) from G 
+	Y = ['Y']
 	identify.causal_identification(G,X,Y)
 
 	# Draw the C-tree and AC-tree 
 	# identify.draw_C_tree(G,X,Y)
 	# identify.draw_AC_tree(G,X,Y)
+
+	# Copy the graph for comparing with Fusion
+	# pyperclip.copy(graph.graph_dict_to_fusion_graph(graph_dict))
 	
 
 

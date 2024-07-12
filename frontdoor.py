@@ -52,9 +52,15 @@ def constructive_FD(G, X, Y):
 		return False
 	C = set( adjustment.construct_minimum_adjustment_set(G,X,Z_ii) ) - set(X) - set(Y)
 	CX = list(set(X).union(set(C)))
+	ZC = list(C.union(set(Z_ii)))
+	X_C = list( set(X) - set(graph.find_ancestor(graph.G_cut_incoming_edges(G,Z_ii), C)) )
+
 	condition1 = graph.is_d_separated(graph.G_cut_outgoing_edges(G, X), X, Z_ii, C)
-	condition2 = adjustment.check_adjustment_criterion(G, Z_ii, Y, CX)
-	if condition1 and condition2: 
+	condition2 = graph.is_d_separated(graph.G_cut_incoming_edges(graph.G_cut_outgoing_edges(G, Z_ii), X), Y, Z_ii, CX)
+	condition3 = graph.is_d_separated(graph.G_cut_incoming_edges(graph.G_cut_incoming_edges(G, Z_ii), X_C), Y, X, ZC)
+	condition4 = adjustment.check_adjustment_criterion(G, Z_ii, Y, CX)
+
+	if condition1 and condition2 and condition3 and condition4: 
 		FD_true_false = True 
 		CZ_dict = {"Z": Z_ii, "C": list(C)}
 		return CZ_dict

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import random
 import numpy as np
 import pandas as pd
+import graph
 
 class StructuralCausalModel:
 	def __init__(self):
@@ -85,68 +86,177 @@ class StructuralCausalModel:
 
 		return binary_equation
 
-
-	def generate_random_scm(self, num_unobserved, num_observed, num_treatments, num_outcomes, seed = None):
-		"""
-		Generate a random Structural Causal Model (SCM).
+	def generate_random_scm_test(self, num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.5, seed = None):
+		'''
+		Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.
 
 		Parameters:
-		num_unobserved (int): Number of unobserved variables.
-		num_observed (int): Number of observed variables.
+		num_observables (int): Number of observable nodes.
+		num_unobservables (int): Number of unobservable nodes.
 		num_treatments (int): Number of treatment variables.
 		num_outcomes (int): Number of outcome variables.
-		"""
-		if seed is not None: 
-			random.seed(int(seed))
-			np.random.seed(seed)
 
-		# Initialize observed variable names based on their types (treatment, outcome, or other)
-		observed_vars = []
-		for i in range(num_observed):
-			var_type = 'T' if i < num_treatments else 'O' if i >= num_observed - num_outcomes else 'V'
-			observed_vars.append(f'{var_type}{i+1}')
+		Returns:
+		tuple: Graph dictionary, node positions, lists X and Y.
+		'''
 
-		# Attempt to create an acyclic graph
-		while True:
+		# Create observable nodes
+		treatments = [f'X{i+1}' for i in range(num_treatments)]
+		outcomes = [f'Y{i+1}' for i in range(num_outcomes)]
+		other_observables = [f'V{i+1}' for i in range(num_observables - num_treatments - num_outcomes)]
+		all_observables = treatments + outcomes + other_observables
+		is_acyclic = False
+
+		while not is_acyclic:
 			self.graph.clear()
 			self.equations.clear()
 			self.noise_distributions.clear()
 
 			# Add unobserved variables
-			for i in range(num_unobserved):
+			for i in range(num_unobservables):
 				self.add_unobserved_variable(f'U{i+1}', stats.norm(0, 1))
 
-			# Randomly connect observed variables ensuring no isolated variables
-			if not self.connect_observed_variables(observed_vars, num_observed):
-				continue  # Retry if graph is not valid
+			# Assign two childs to each unobserved variables 
+			# unobservable_edges = set()
+			for i in range(num_unobservables):
+				obs_pair = random.sample(all_observables, 2)
+				u_var = f'U_{"_".join(obs_pair)}'
+				self.add_unobserved_variable(u_var, stats.norm(0, 1))
+				for child in obs_pair:
+					self.graph.add_edge(u_var, child)
 
-			# Assign two observed variables to each unobserved variable
-			if not self.assign_unobserved_parents(observed_vars):
-				continue  # Retry if graph is not valid
+			additional_edges = [(a, b) for a in all_observables for b in all_observables if a != b]
+			random.shuffle(additional_edges)
+			additional_edges = random.sample(additional_edges, round(len(additional_edges)*sparcity_constant))
 
-			# Check if the resultant graph is acyclic
+			for edge in additional_edges:
+				self.graph.add_edge(*edge)
+				if not nx.is_directed_acyclic_graph(self.graph):
+					self.graph.remove_edge(*edge)
+
 			if nx.is_directed_acyclic_graph(self.graph):
-				break  # Valid graph generated
+				if set(outcomes).issubset(set(self.graph.nodes)):
+					is_acyclic = False
+					for var_name in all_observables:
+						parents = graph.find_parents(self.graph, [var_name])
+						equation_type = 'binary' if var_name.startswith('X') or var_name.startswith('Y') else 'linear'
+						equation = self.create_binary_equation(parents) if equation_type == 'binary' else self.create_random_linear_equation(parents)
+						noise_dist = stats.bernoulli(0.5) if equation_type == 'binary' else stats.norm(0, 0.1)
+						self.add_observed_variable(var_name, equation, parents, noise_dist)
+					break 
+				else:
+					continue
 
-	def connect_observed_variables(self, observed_vars, num_observed):
-		"""
-		Randomly connect observed variables and ensure no isolated variables.
-		"""
-		for var_name in observed_vars:
-			possible_parents = [v for v in observed_vars if v != var_name] 
-			num_parents = random.randint(0, min(len(possible_parents), int(num_observed / 1.5)))  # Limit number of parents
-			parents = random.sample(possible_parents, num_parents)
-			equation_type = 'binary' if var_name.startswith('T') or var_name.startswith('O') else 'linear'
-			equation = self.create_binary_equation(parents) if equation_type == 'binary' else self.create_random_linear_equation(parents)
-			noise_dist = stats.bernoulli(0.5) if equation_type == 'binary' else stats.norm(0, 0.1)
-			self.add_observed_variable(var_name, equation, parents, noise_dist)
 
-		# Check for isolated variables
-		for var in observed_vars:
-			if self.graph.in_degree(var) == 0 and self.graph.out_degree(var) == 0:
-				return False  # Isolated variable found
-		return True
+	# def generate_random_scm(self, num_observed, num_unobserved, num_treatments, num_outcomes, seed = None):
+	# 	"""
+	# 	Generate a random Structural Causal Model (SCM).
 
+	# 	Parameters:
+	# 	num_unobserved (int): Number of unobserved variables.
+	# 	num_observed (int): Number of observed variables.
+	# 	num_treatments (int): Number of treatment variables.
+	# 	num_outcomes (int): Number of outcome variables.
+	# 	"""
+	# 	if seed is not None: 
+	# 		random.seed(int(seed))
+	# 		np.random.seed(seed)
+
+	# 	# Initialize observed variable names based on their types (treatment, outcome, or other)
+	# 	observed_vars = []
+	# 	for i in range(num_treatments):
+	# 		var_type = 'X'
+	# 		observed_vars.append(f'{var_type}{i+1}')
+
+	# 	for i in range(num_outcomes):
+	# 		var_type = 'Y'
+	# 		observed_vars.append(f'{var_type}{i+1}')
+
+	# 	for i in range(num_observed - num_treatments - num_outcomes ):
+	# 		var_type = 'V'
+	# 		observed_vars.append(f'{var_type}{i+1}')
+
+	# 	# Attempt to create an acyclic graph
+	# 	while True:
+	# 		self.graph.clear()
+	# 		self.equations.clear()
+	# 		self.noise_distributions.clear()
+
+	# 		# Add unobserved variables
+	# 		for i in range(num_unobserved):
+	# 			self.add_unobserved_variable(f'U{i+1}', stats.norm(0, 1))
+
+	# 		# Randomly connect observed variables ensuring no isolated variables
+	# 		if not self.connect_observed_variables(observed_vars, num_observed):
+	# 			continue  # Retry if graph is not valid
+
+	# 		# Assign two observed variables to each unobserved variable
+	# 		if not self.assign_unobserved_parents(observed_vars):
+	# 			continue  # Retry if graph is not valid
+
+	# 		# Check if the resultant graph is acyclic
+	# 		if nx.is_directed_acyclic_graph(self.graph):
+	# 			break  # Valid graph generated
+
+
+	def generate_random_graph(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.25):
+		'''
+		Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.
+
+		Parameters:
+		num_observables (int): Number of observable nodes.
+		num_unobservables (int): Number of unobservable nodes.
+		num_treatments (int): Number of treatment variables.
+		num_outcomes (int): Number of outcome variables.
+
+		Returns:
+		tuple: Graph dictionary, node positions, lists X and Y.
+		'''
+
+		# Create observable nodes
+		treatments = [f'X{i+1}' for i in range(num_treatments)]
+		outcomes = [f'Y{i+1}' for i in range(num_outcomes)]
+		other_observables = [f'V{i+1}' for i in range(num_observables - num_treatments - num_outcomes)]
+
+		all_observables = treatments + outcomes + other_observables
+		is_acyclic = False
+
+		while not is_acyclic:
+			G = nx.DiGraph()
+
+			# Add unobservable edges
+			unobservable_edges = set()
+			for i in range(num_unobservables):
+				obs_pair = random.sample(all_observables, 2)
+				unobservable = f'U_{"_".join(obs_pair)}'
+				for child in obs_pair:
+					unobservable_edges.add((unobservable, child))
+
+			G.add_edges_from(unobservable_edges)
+
+			# Optional: Add additional edges between observables
+			additional_edges = [(a, b) for a in all_observables for b in all_observables if a != b]
+			random.shuffle(additional_edges)
+			additional_edges = random.sample(additional_edges, round(len(additional_edges)*sparcity_constant))
+			for edge in additional_edges:
+				G.add_edge(*edge)
+				if not nx.is_directed_acyclic_graph(G):
+					G.remove_edge(*edge)
+
+			if nx.is_directed_acyclic_graph(G):
+				if set(outcomes).issubset(set(G.nodes)):
+					break 
+				else:
+					continue
+
+
+		# Generate node positions for visualization
+		node_positions = {node: (random.uniform(0, 100), random.uniform(0, 100)) for node in G.nodes()}
+
+		# Convert graph to dictionary format
+		graph_dict = {node: list(G.successors(node)) for node in G.nodes()}
+
+		return [graph_dict, node_positions, treatments, outcomes]
 
 	def assign_unobserved_parents(self, observed_vars):
 		"""
@@ -161,6 +271,36 @@ class StructuralCausalModel:
 					return False
 		return True
 
+	def connect_observed_variables(self, observed_vars, num_observed):
+		"""
+		Randomly connect observed variables and ensure no isolated variables.
+		"""
+		for var_name in observed_vars:
+			possible_parents = [v for v in observed_vars if v != var_name] 
+			num_parents = random.randint(0, min(len(possible_parents), int(num_observed / 1.5)))  # Limit number of parents
+			parents = random.sample(possible_parents, num_parents)
+			equation_type = 'binary' if var_name.startswith('X') or var_name.startswith('Y') else 'linear'
+			equation = self.create_binary_equation(parents) if equation_type == 'binary' else self.create_random_linear_equation(parents)
+			noise_dist = stats.bernoulli(0.5) if equation_type == 'binary' else stats.norm(0, 0.1)
+			self.add_observed_variable(var_name, equation, parents, noise_dist)
+
+		# Check for isolated variables
+		for var in observed_vars:
+			if self.graph.in_degree(var) == 0 and self.graph.out_degree(var) == 0:
+				return False  # Isolated variable found
+		return True
+
+
+	def generate_samples(self, num_samples, seed=None):
+		""" Generate n samples from the SCM for observed variables. """
+		if seed is not None: 
+			random.seed(int(seed))
+			np.random.seed(seed)
+
+		self.sample_dict.clear()
+		for var in self.equations:  # Iterate only over observed variables
+			self.compute(var, num_samples)
+		return pd.DataFrame(self.sample_dict)
 
 	def visualize(self):
 		""" Visualize the causal graph with colored nodes for treatments and outcomes. """
@@ -179,16 +319,7 @@ class StructuralCausalModel:
 		nx.draw(self.graph, pos, with_labels=True, node_color=color_map, font_weight='bold', arrows=True)
 		plt.show()
 
-	def generate_samples(self, num_samples, seed=None):
-		""" Generate n samples from the SCM for observed variables. """
-		if seed is not None: 
-			random.seed(int(seed))
-			np.random.seed(seed)
-
-		self.sample_dict.clear()
-		for var in self.equations:  # Iterate only over observed variables
-			self.compute(var, num_samples)
-		return pd.DataFrame(self.sample_dict)
+	
 
 if __name__ == "__main__":
 	'''

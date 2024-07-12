@@ -452,6 +452,54 @@ def find_reacheable_set(G, X, A, Z):
 	return list(closure.union(X_set))
 
 
+def do_calculus_1(G, Y, Z, X, W):
+	'''
+	Check (Y indep Z | X, W)_{do(X)}
+
+	Parameters:
+	G (nx.DiGraph): The original directed graph.
+	Y (list)
+	Z (list)
+	X (list)
+	W (list)
+
+	Returns:
+	bool: True False
+	'''
+	return is_d_separated(G_cut_incoming_edges(G,X), Y, Z, W + X)
+
+def do_calculus_2(G, Y, Z, X, W):
+	'''
+	Check (Y indep Z | X, W)_{do(X)}
+
+	Parameters:
+	G (nx.DiGraph): The original directed graph.
+	Y (list)
+	Z (list)
+	X (list)
+	W (list)
+
+	Returns:
+	bool: True False
+	'''
+	return is_d_separated(G_cut_outgoing_edges(G_cut_incoming_edges(G,X), Z), Y, Z, W + X)
+
+def do_calculus_3(G, Y, Z, X, W):
+	'''
+	Check (Y indep Z | X, W)_{do(X)}
+
+	Parameters:
+	G (nx.DiGraph): The original directed graph.
+	Y (list)
+	Z (list)
+	X (list)
+	W (list)
+
+	Returns:
+	bool: True False
+	'''
+	Z_W = list( set(Z) - set(find_ancestor(G_cut_incoming_edges(G,X), W)) )
+	return is_d_separated(G_cut_incoming_edges(G_cut_incoming_edges(G,X), Z_W), Y, Z, W + X)
 
 def graph_dict_to_fusion_graph(graph_dict):
 	'''
