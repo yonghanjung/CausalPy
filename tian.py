@@ -42,9 +42,9 @@ def check_Generalized_Tian_criterion(G,X):
 
 	# 1. Union of S_X 
 	for Xi in X: 
-		Ch_Xi = graph.find_children(G, Xi)
-		S_Xi = graph.find_c_components(G, list(Xi))
-		S_Ch_Xi = graph.find_c_components(G, Ch_Xi)
+		Ch_Xi_except_X = list( set( graph.find_children(G, [Xi]) ) - set(X) )
+		S_Xi = graph.find_c_components(G, [Xi])
+		S_Ch_Xi = graph.find_c_components(G, Ch_Xi_except_X)
 		if len(set(S_Xi).intersection(set(S_Ch_Xi))) > 0:
 			return False
 	return True 
@@ -68,11 +68,8 @@ def generalized_Tian_estimand(G, X, Y, latex, topo_V = None):
 		else:
 			Q_V_SX += f"P({Vi})"
 
-	SX_list = []
-	X_Clist = []
 	idx = 0 
 	X_copy = X[:]
-	X_Clist_val = []
 
 	Q_SX = ""
 	while len(X_copy) > 0: 
@@ -80,10 +77,6 @@ def generalized_Tian_estimand(G, X, Y, latex, topo_V = None):
 		S_Xi = sorted( graph.find_c_components(G, [Xi]), key=lambda x: topo_V.index(x) )
 		X_Ci = sorted( list(set(S_Xi).intersection(set(X))), key=lambda x: topo_V.index(x) )
 		X_Ci_val = ','.join(char.lower() for char in X_Ci)
-
-		# SX_list.append(S_Xi)
-		# X_Clist.append(X_Ci)
-		# X_Clist_val.append([','.join(char.lower() for char in X_Ci)])
 		X_copy = list(set(X_copy) - set(X_Ci))
 
 		idx += 1
@@ -91,7 +84,7 @@ def generalized_Tian_estimand(G, X, Y, latex, topo_V = None):
 		if len(S_Xi) > 1: 
 			Q_SXi_component = ""
 
-			range_limit = len(S_Xi) if S_Xi[-1] != Xi else len(S_Xi) - next((i for i, x in enumerate(reversed(S_Xi), 1) if not x.startswith('X')), len(S_Xi)) + 1
+			range_limit = len(S_Xi) if S_Xi[-1] not in X_Ci else len(S_Xi) - next((i for i, x in enumerate(reversed(S_Xi), 1) if not x.startswith('X')), len(S_Xi)) + 1
 			if range_limit != len(S_Xi):
 				last_X_idx = next((i for i, x in enumerate(reversed(S_Xi), 1) if not x.startswith('X')), len(S_Xi)) - 1
 				last_X = S_Xi[-last_X_idx:]
@@ -124,10 +117,16 @@ def generalized_Tian_estimand(G, X, Y, latex, topo_V = None):
 
 	V_XY_lower = ', '.join(char.lower() for char in V_XY)
 	
-	if not latex:
-		estimand = f"\u03A3_{{{V_XY_lower}}}{Q_V_SX}{Q_SX}"
+	if len(V_XY) > 0:
+		if not latex:
+			estimand = f"\u03A3_{{{V_XY_lower}}}{Q_V_SX}{Q_SX}"
+		else:
+			estimand = f"\\sum_{{{V_XY_lower}}}{Q_V_SX}{Q_SX}"
 	else:
-		estimand = f"\\sum_{{{V_XY_lower}}}{Q_V_SX}{Q_SX}"
+		if not latex:
+			estimand = f"{Q_V_SX}{Q_SX}"
+		else:
+			estimand = f"{Q_V_SX}{Q_SX}"
 	return estimand 
 
 
@@ -137,9 +136,10 @@ def Tian_estimand(G, X, Y, latex, topo_V = None):
 	if topo_V == None:
 		topo_V = graph.find_topological_order(G)
 
-	SX = graph.find_c_components(G, X)
-	V_SX = list( set(topo_V) - set(SX) )
-	V_XY = list( set(topo_V) - set(X + Y))
+	X = sorted(X, key = lambda x: topo_V.index(x))
+	SX = sorted( graph.find_c_components(G, X), key=lambda x: topo_V.index(x) )	
+	V_SX = sorted( list( set(topo_V) - set(SX) ) , key=lambda x: topo_V.index(x) )	
+	V_XY = sorted( list( set(topo_V) - set(X + Y)), key=lambda x: topo_V.index(x) )	
 	V_XY_lower = ', '.join(char.lower() for char in V_XY)
 	X_lower_val = ', '.join(char.lower() for char in X)
 
@@ -153,7 +153,15 @@ def Tian_estimand(G, X, Y, latex, topo_V = None):
 			Q_V_SX += f"P({Vi})"
 
 	Q_SX = ""
-	for i in range(len(SX)):
+	range_limit = len(SX) if SX[-1] not in X else len(SX) - next((i for i, x in enumerate(reversed(SX), 1) if not x.startswith('X')), len(SX)) + 1
+	if range_limit != len(SX):
+		last_X_idx = next((i for i, x in enumerate(reversed(SX), 1) if not x.startswith('X')), len(SX)) - 1
+		last_X = SX[-last_X_idx:]
+		X_remained = list(set(X) - set(last_X))
+	else:
+		X_remained = X[:]
+
+	for i in range(range_limit):
 		Vi = SX[i]
 		V_prev_i = ','.join(topo_V[:topo_V.index(Vi)]) 
 		if len(V_prev_i) > 0:
@@ -161,8 +169,29 @@ def Tian_estimand(G, X, Y, latex, topo_V = None):
 		else:
 			Q_SX += f"P({Vi})"
 
-	if not latex:
-		estimand = f"\u03A3_{{{V_XY_lower}}}{Q_V_SX} \u03A3_{{{X_lower_val}}}{Q_SX}"
+	if len(X_remained) > 0:
+		X_remained = ','.join(char.lower() for char in X_remained)
+		if not latex:
+			Q_SX = f"(\u03A3_{{{X_remained}}}{Q_SX})"
+		else:
+			Q_SX = f"\\left(\\sum_{{{X_remained}}}{Q_SX}\\right)"
+
 	else:
-		estimand = f"\\sum_{{{V_XY_lower}}}{Q_V_SX} \\sum_{{{X_lower_val}}}{Q_SX}"
+		if not latex:
+			Q_SX = f"({Q_SX})"
+		else:
+			Q_SX = f"\\left({Q_SX}\\right)"
+
+
+
+	if len(V_XY) > 0:
+		if not latex:
+			estimand = f"\u03A3_{{{V_XY_lower}}}{Q_V_SX}{Q_SX}"
+		else:
+			estimand = f"\\sum_{{{V_XY_lower}}}{Q_V_SX}{Q_SX}"
+	else:
+		if not latex:
+			estimand = f"{Q_V_SX}{Q_SX}"
+		else:
+			estimand = f"{Q_V_SX}{Q_SX}"
 	return estimand 

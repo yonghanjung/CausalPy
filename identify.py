@@ -504,16 +504,19 @@ def causal_identification(G,X,Y,latex = True):
 			return None
 		else: 
 			return causal_expression
-
-		
 	
 	# Prepare "X, Y" to be printed 
+	topo_V = graph.find_topological_order(G)
+	X = sorted(X, key = lambda x: topo_V.index(x))
+	Y = sorted(Y, key = lambda x: topo_V.index(x))
+
 	X_print = ', '.join(X)
 	Y_print = ', '.join(Y)
 	orig_X = X 
 
 	# Run the ID algorithm 
 	ID_constant, ID_dict_components, ID_dict_operations = ID_return_Ctree(G,X,Y)
+
 	
 	# Return if P(Y | do(x)) = P(Y)
 	if ID_constant == -1:
@@ -595,7 +598,8 @@ def causal_identification(G,X,Y,latex = True):
 	for key, values in ID_dict_components.items():
 		# Reverse iteration to find the first element satisfying the mSBD criterion
 		for elem in reversed(values):
-			W = list(elem)  # Convert elem to list if it's not already
+			W = sorted(list(elem), key = lambda x: topo_V.index(x)) # Convert elem to list if it's not already
+			# W = list(elem)  
 			R = list(graph.find_parents(G, W))  # Find the parents of Y in G
 			# Check if the mSBD criterion is satisfied
 			if mSBD.constructive_SAC_criterion(G, R, W):
@@ -628,7 +632,7 @@ def causal_identification(G,X,Y,latex = True):
 				if Q_W_mSBD_True_False: # Q[C] = \sum Q[W] where Q[W] is mSBD
 					dict_mSBD_TF[key].append(True) # Q[C] = \sum Q[W] where Q[W] is mSBD
 					R = list(graph.find_parents(G, C))
-					Q_C = mSBD.mSBD_estimand(G, R, C, latex, True)
+					Q_C = mSBD.mSBD_estimand(G, R, C, latex, minimum = True)
 					
 					W = C.copy()
 					topo_W = list(graph.find_topological_order( graph.subgraphs(G, W) ))
@@ -655,7 +659,7 @@ def causal_identification(G,X,Y,latex = True):
 					W_minus_C = list(set(W).difference(set(C)))
 					R = list(graph.find_parents(G, W_minus_C))
 					if mSBD.constructive_SAC_criterion(G, R, W_minus_C): # if Q[W\C] is mSBD
-						Q_W_C = mSBD.mSBD_estimand(G, R, W_minus_C, latex, True)
+						Q_W_C = mSBD.mSBD_estimand(G, R, W_minus_C, latex, minimum = True)
 						if not latex:
 							Q_C = f"[[{Q_W}]/[{Q_W_C}]]"
 						else:
@@ -674,7 +678,7 @@ def causal_identification(G,X,Y,latex = True):
 							# Q[W1,...,W{i}]
 							W_1_to_i = list(set(W).difference(set(Wi1_to_Wm)))
 							R_W_1_to_i = list(graph.find_parents(G, W_1_to_i))
-							numerator = mSBD.mSBD_estimand(G, R_W_1_to_i, W_1_to_i, latex, True)
+							numerator = mSBD.mSBD_estimand(G, R_W_1_to_i, W_1_to_i, latex, minimum = True)
 							# Q[W1,...,W{i-1}]
 							W_1_to_i1 = list(set(W).difference(set(Wi_to_Wm))) 
 							if len(W_1_to_i1) == 0:
@@ -682,7 +686,7 @@ def causal_identification(G,X,Y,latex = True):
 								Q_C_component.append(Q_C_component_element)
 							else:
 								R_W_1_to_i1 = list(graph.find_parents(G, W_1_to_i1))
-								denominator = mSBD.mSBD_estimand(G, R_W_1_to_i1, W_1_to_i1, latex, True)
+								denominator = mSBD.mSBD_estimand(G, R_W_1_to_i1, W_1_to_i1, latex, minimum = True)
 								if not latex: 
 									Q_C_component_element = f"[({numerator}) / ({denominator})]"
 								else:
