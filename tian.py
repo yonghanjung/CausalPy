@@ -130,8 +130,6 @@ def generalized_Tian_estimand(G, X, Y, latex, topo_V = None):
 	return estimand 
 
 
-
-
 def Tian_estimand(G, X, Y, latex, topo_V = None):
 	if topo_V == None:
 		topo_V = graph.find_topological_order(G)

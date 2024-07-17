@@ -55,6 +55,7 @@ class StructuralCausalModel:
 		
 		return self.sample_dict[variable]
 
+
 	def create_random_linear_equation(self, parents):
 		""" Create a random linear equation for an observed variable. """
 		coefficients = {var: random.uniform(-1, 1) for var in parents}
