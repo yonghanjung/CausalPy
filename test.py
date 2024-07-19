@@ -43,8 +43,8 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.Rina1() 
 	
 	# Generate the random graph 
-	[graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator(num_observables = 5, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 
-																			condition_ID = True, condition_BD = False, condition_mSBD = True, condition_FD = False, condition_Tian = False, condition_gTian = False)
+	[graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator(num_observables = 10, num_unobservables = 5, num_treatments = 2, num_outcomes = 1, 
+																			condition_ID = True, condition_BD = True, condition_mSBD = True, condition_FD = True, condition_Tian = True, condition_gTian = True)
 	# graph_dict = {'U_V1_X3': ['V1', 'X3'], 'V1': ['X1'], 'U_V1_X2': ['X2', 'V1'], 'X2': ['X1', 'V1', 'V2', 'Y1'], 'U_V1_Y1': ['Y1', 'V1'], 'Y1': [], 'X3': ['X2', 'X1', 'V1'], 'U_X1_X3': ['X3', 'X1'], 'X1': ['V2'], 'V2': ['Y1']}
 	# X = ['X1','X2']; Y = ['Y1']; node_positions = None
 	G = graph.create_acyclic_graph(graph_dict=graph_dict, an_Y_graph_TF = False, Y = None, node_positions = node_positions)

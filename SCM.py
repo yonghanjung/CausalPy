@@ -5,6 +5,7 @@ import random
 import numpy as np
 import pandas as pd
 import graph
+from scipy.special import expit, logit
 
 class StructuralCausalModel:
 	def __init__(self):
@@ -68,6 +69,21 @@ class StructuralCausalModel:
 			for var, coef in coefficients.items():
 				result += coef * args[var]
 			return result + intercept + noise
+
+		return linear_equation
+
+	def create_random_linear_bounded_equation(self, parents):
+		""" Create a random linear equation for an observed variable. """
+		coefficients = {var: random.uniform(-1, 1) for var in parents}
+		intercept = random.uniform(-1, 1)
+
+		def linear_equation(**args):
+			num_samples = args.pop('num_sample')
+			noise = args.pop('noise')
+			result = np.zeros(num_samples)
+			for var, coef in coefficients.items():
+				result += coef * args[var]
+			return expit(result + intercept + noise)
 
 		return linear_equation
 
@@ -140,8 +156,17 @@ class StructuralCausalModel:
 					is_acyclic = False
 					for var_name in all_observables:
 						parents = graph.find_parents(self.graph, [var_name])
-						equation_type = 'binary' if var_name.startswith('X') or var_name.startswith('Y') else 'linear'
-						equation = self.create_binary_equation(parents) if equation_type == 'binary' else self.create_random_linear_equation(parents)
+						# equation_type = 'binary' if var_name.startswith('X') or var_name.startswith('Y') else 'linear'
+						if var_name.startswith('X'):
+							equation_type = 'binary' 
+							equation = self.create_binary_equation(parents)
+						elif var_name.startswith('Y'):
+							equation_type = 'linear_bound' 
+							equation = self.create_random_linear_bounded_equation(parents)
+						else:
+							equation_type = 'linear'
+							equation = self.create_random_linear_equation(parents)
+						# equation = self.create_binary_equation(parents) if equation_type == 'binary' else self.create_random_linear_equation(parents)
 						noise_dist = stats.bernoulli(0.5) if equation_type == 'binary' else stats.norm(0, 0.1)
 						self.add_observed_variable(var_name, equation, parents, noise_dist)
 					break 
