@@ -7,8 +7,83 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
+from scipy.optimize import minimize
+from scipy.stats import norm
 import copy
 from scipy import stats
+
+def randomized_equation(**args):
+	num_samples = args.pop('num_sample')
+	return np.random.binomial(1, 0.5, num_samples)
+
+def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=5, batch_size=100):
+	col_feature = X + Z
+	col_label = ['residual']
+	approximators = []
+	IxX = np.array((obs[X] == x_val).prod(axis=1))
+	mu_xZ = obs[col_feature_1]
+	mu_XZ = obs[col_feature_2]
+
+	for i in range(B):
+		obs_batch = obs.sample(n=batch_size, replace = True)
+		W_opt_batch = entropy_balancing(obs_batch, x_val, X, Z, col_feature_1, col_feature_2)
+		if i == 0:
+			residual = W_opt_batch
+		else:
+			residual = W_opt_batch - sum(mu_i.predict(xgb.DMatrix(obs_batch[col_feature])) for mu_i in approximators)
+		obs_batch.loc[:, 'residual'] = residual
+		mu_i = learn_mu(obs_batch, col_feature, col_label, params=None)
+		approximators.append(mu_i)
+	
+	W_project = sum(mu_i.predict(xgb.DMatrix(obs[col_feature])) for mu_i in approximators)
+	return W_project * IxX
+
+
+def entropy_balancing(obs, x_val, X, Z, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ'):
+	# Define the objective function
+	def objective(W, IxX):
+		# Sum only for indices where X_i = 1
+		return np.sum(W * np.log(W))
+
+	# Define the constraints
+	def constraint1(W, IxX):
+		# \sum_{i=1}^{n} W_i X_i - n = 0
+		return np.sum(W * IxX) - n
+
+	# def constraint2(W, IxX, Cval):
+	# 	# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
+	# 	return np.sum(W * IxX * Cval) - np.sum(Cval)
+
+	def constraint3(W, IxX, Cval1, Cval2):
+		# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
+		return np.sum(W * IxX * Cval1) - np.sum(Cval2)
+
+	IxX = np.array((obs[X] == x_val).prod(axis=1))
+	n = len(obs)
+	f_C = obs[Z].values
+	mu_xZ = obs[col_feature_1]
+	mu_XZ = obs[col_feature_2]
+
+	# Initial guess for W (should be positive and sum to n for X_i = 1)
+	W0 = np.ones(n) * np.sum(IxX) / n
+	# Ensure W0 is within bounds
+	W0 = np.clip(W0, 1e-10, None)
+
+	# Define the constraints in the format required by scipy.optimize.minimize
+	constraints = [{'type': 'eq', 'fun': constraint1, 'args': (IxX,)}]
+	constraints.append({'type': 'eq', 'fun': constraint3, 'args': (IxX, mu_XZ, mu_xZ)})
+
+	# for dimidx in range(len(Z)):
+	# 	constraints.append({'type': 'eq', 'fun': constraint2, 'args': (IxX, f_C[:, dimidx],)})
+	# 	# constraints.append({'type': 'eq', 'fun': constraint2, 'args': (IxX, f_C[:, dimidx] ** 2,)})
+
+	# Define bounds for W (W_i > 0)
+	bounds = [(1e-5, None) for _ in range(n)]
+
+	# Solve the optimization problem
+	result = minimize(objective, W0, args=(IxX,), bounds=bounds, constraints=constraints, method='SLSQP')
+	W_opt = result.x
+	return W_opt
 
 
 # Function to compute the confidence interval

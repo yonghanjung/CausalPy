@@ -7,6 +7,7 @@ import copy
 from scipy.optimize import minimize
 from scipy.stats import norm
 import warnings
+from scipy.stats import spearmanr
 
 import random_generator
 import graph
@@ -17,95 +18,22 @@ import mSBD
 import tian
 import statmodules
 
+# Turn off alarms
 pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
-
-def randomized_equation(**args):
-	num_samples = args.pop('num_sample')
-	return np.random.binomial(1, 0.5, num_samples)
-
-def entropy_balancing_booster(obs, x_val, Z, X, Y, B=10, batch_size=100):
-	col_feature = X + Z
-	col_label = ['residual']
-	approximators = []
-	IxX = np.array((obs[X] == x_val.values).prod(axis=1))
-	mu_xZ = obs['mu_xZ']
-	mu_XZ = obs['mu_XZ']
-
-	for i in range(B):
-		obs_batch = obs.sample(n=batch_size, replace = True)
-		W_opt_batch = entropy_balancing(obs_batch, x_val, Z)
-		if i == 0:
-			residual = W_opt_batch
-		else:
-			residual = W_opt_batch - sum(mu_i.predict(xgb.DMatrix(obs_batch[col_feature])) for mu_i in approximators)
-		obs_batch.loc[:, 'residual'] = residual
-		mu_i = statmodules.learn_mu(obs_batch, col_feature, col_label, params=None)
-		approximators.append(mu_i)
-	
-	W_project = sum(mu_i.predict(xgb.DMatrix(obs[col_feature])) for mu_i in approximators)
-	return W_project * IxX
-
-
-def entropy_balancing(obs, x_val, Z):
-	# Define the objective function
-	def objective(W, IxX):
-		# Sum only for indices where X_i = 1
-		return np.sum(W * np.log(W))
-
-	# Define the constraints
-	def constraint1(W, IxX):
-		# \sum_{i=1}^{n} W_i X_i - n = 0
-		return np.sum(W * IxX) - n
-
-	def constraint2(W, IxX, Cval):
-		# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
-		return np.sum(W * IxX * Cval) - np.sum(Cval)
-
-	def constraint3(W, IxX, Cval1, Cval2):
-		# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
-		return np.sum(W * IxX * Cval1) - np.sum(Cval2)
-
-	IxX = np.array((obs[X] == x_val.values).prod(axis=1))
-	n = len(obs)
-	f_C = obs[Z].values
-	mu_xZ = obs['mu_xZ']
-	mu_XZ = obs['mu_XZ']
-
-	# Initial guess for W (should be positive and sum to n for X_i = 1)
-	W0 = np.ones(n) * np.sum(IxX) / n
-	# Ensure W0 is within bounds
-	W0 = np.clip(W0, 1e-10, None)
-
-	# Define the constraints in the format required by scipy.optimize.minimize
-	constraints = [{'type': 'eq', 'fun': constraint1, 'args': (IxX,)}]
-	constraints.append({'type': 'eq', 'fun': constraint3, 'args': (IxX, mu_XZ, mu_xZ)})
-
-	for dimidx in range(len(Z)):
-		constraints.append({'type': 'eq', 'fun': constraint2, 'args': (IxX, f_C[:, dimidx],)})
-		# constraints.append({'type': 'eq', 'fun': constraint2, 'args': (IxX, f_C[:, dimidx] ** 2,)})
-
-	# Define bounds for W (W_i > 0)
-	bounds = [(1e-5, None) for _ in range(n)]
-
-	# Solve the optimization problem
-	result = minimize(objective, W0, args=(IxX,), bounds=bounds, constraints=constraints, method='SLSQP')
-	W_opt = result.x
-	return W_opt
-
 
 
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
 	scm, X, Y = random_generator.Random_SCM_Generator(
-		num_observables=10, num_unobservables=0, num_treatments=2, num_outcomes=1,
+		num_observables=10, num_unobservables=0, num_treatments=5, num_outcomes=1,
 		condition_ID=True, condition_BD=True, condition_mSBD=True, 
 		condition_FD=False, condition_Tian=True, condition_gTian=True
 	)
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
-	obs_data = scm.generate_samples(100)[topo_V]
+	obs_data = scm.generate_samples(10000)[topo_V]
 
 	print(obs_data)
 	print(identify.causal_identification(G, X, Y, False))
@@ -124,7 +52,7 @@ if __name__ == "__main__":
 
 	# Update SCM equations with randomized equations for each Xi in X
 	for Xi in X:
-		scm.equations[Xi] = randomized_equation
+		scm.equations[Xi] = statmodules.randomized_equation
 
 	intv_data = scm.generate_samples(1000000)[topo_V]
 
@@ -169,9 +97,9 @@ if __name__ == "__main__":
 				obs_test.loc[:, 'mu_xZ'] = mu_xZ
 				obs_test.loc[:, 'mu_XZ'] = mu_XZ
 				if len(obs_test) < 1000:
-					pi_XZ = entropy_balancing(obs_test, x_val, Z)
+					pi_XZ = statmodules.entropy_balancing(obs_test, x_val.values, X, Z)
 				else: 
-					pi_XZ = entropy_balancing_booster(obs_test, x_val, Z, X, Y, B=5, batch_size=100)
+					pi_XZ = statmodules.entropy_balancing_booster(obs_test, x_val.values, Z, X, B=5, batch_size=100)
 
 				Yvec = (obs_test[Y].values.flatten())
 				OM_est = np.mean(mu_xZ) 
@@ -194,11 +122,19 @@ if __name__ == "__main__":
 	performance = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE.values()))))
 	print("Performance:", performance)
 
+	lower_CI = {}
+	upper_CI = {}
 	for _, x_val in X_values_combinations.iterrows():
 		mean_ATE_x = ATE[tuple(x_val)]
 		lower_x = (mean_ATE_x - z_score * VAR[tuple(x_val)] * (len(obs_data) ** (-1/2)) )
 		upper_x = (mean_ATE_x + z_score * VAR[tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+		lower_CI[tuple(x_val)] = lower_x
+		upper_CI[tuple(x_val)] = upper_x
 		print(tuple(x_val), mean_ATE_x, (lower_x, upper_x) )
+
+	rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE.values()))
+	print(f"Spearman Rank correlation coefficient: {rank_correlation}")
+	print(f"P-value: {rank_p_values}")
 
 	
 
