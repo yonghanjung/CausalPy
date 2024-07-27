@@ -1,3 +1,4 @@
+import pyperclip
 import scipy.stats as stats
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -486,7 +487,7 @@ def draw_AC_tree(G, X, Y):
 
 
 
-def causal_identification(G,X,Y,latex = True):
+def causal_identification(G,X,Y,latex = True, copyTF=True):
 	def compute_Q_W(G, W, topo_W, latex):
 		R = list(graph.find_parents(G, topo_W))
 		if len(R) == 0:
@@ -495,8 +496,9 @@ def causal_identification(G,X,Y,latex = True):
 			Q_W = mSBD.mSBD_estimand(G, R, topo_W, latex, True)
 		return Q_W
 
-	def print_estimand(causal_expression, latex):
+	def print_estimand(causal_expression, latex, copyTF=True):
 		if latex:
+			pyperclip.copy(causal_expression)
 			plt.figure("estimand",figsize=(15, 6))
 			plt.text(0.5, 0.5, f'${causal_expression}$', fontsize=15, ha='center')
 			plt.axis('off')
@@ -794,7 +796,7 @@ def causal_identification(G,X,Y,latex = True):
 			else:
 				causal_expression = f"P({{{Y_print}}} \\mid do({{{X_print}}})) = \\sum_{{{D_minus_Y_values}}} {Q_D}"
 
-	return print_estimand(causal_expression, latex)
+	return print_estimand(causal_expression, latex, copyTF)
 
 
 

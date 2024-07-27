@@ -554,3 +554,50 @@ def graph_dict_to_fusion_graph(graph_dict):
 	return fusion_graph
 
 
+def contiguous_series(G,W,topo_V = None):
+	if topo_V == None:
+		topo_V = find_topological_order(G)
+	position = {node: i for i, node in enumerate(topo_V)}
+	
+	current_seq = []
+	best_seq = []
+	max_length = 0
+
+	# Iterate through the elements in W
+	for node in W:
+		if node in position:
+			# If the current sequence is empty or the current node's position is
+			# exactly 1 greater than the previous node's position in the sequence,
+			# then continue the sequence
+			if not current_seq or position[node] == position[current_seq[-1]] + 1:
+				current_seq.append(node)
+			else:
+				# If the current sequence is broken, check if it's the longest found so far
+				if len(current_seq) > max_length:
+					best_seq = current_seq
+					max_length = len(current_seq)
+				# Start a new sequence
+				current_seq = [node]
+	
+	# Check the last sequence after the loop
+	if len(current_seq) > max_length:
+		best_seq = current_seq
+	
+	return list(tuple(best_seq))
+
+def find_successors(G,W,topo_V = None):
+	W_cont = contiguous_series(G,W)
+	if set(W_cont) != set(W):
+		raise(f"{W} is not contiguous")
+	
+	if topo_V == None:
+		topo_V = find_topological_order(G)
+	W = sorted(W, key=lambda x: topo_V.index(x))
+	return(topo_V[topo_V.index(W[-1])+1:])
+
+def find_predecessors(G,W,topo_V = None):
+	if topo_V == None:
+		topo_V = find_topological_order(G)
+	W = sorted(W, key=lambda x: topo_V.index(x))
+	return(topo_V[:topo_V.index(W[0])])
+	

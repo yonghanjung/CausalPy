@@ -22,62 +22,24 @@ import statmodules
 pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 
-
-if __name__ == "__main__":
-	# Generate random SCM and preprocess the graph
-	scm, X, Y = random_generator.Random_SCM_Generator(
-		num_observables=10, num_unobservables=0, num_treatments=5, num_outcomes=1,
-		condition_ID=True, condition_BD=True, condition_mSBD=True, 
-		condition_FD=False, condition_Tian=True, condition_gTian=True
-	)
-	G = scm.graph
-	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
-	topo_V = graph.find_topological_order(G)
-	obs_data = scm.generate_samples(10000)[topo_V]
-
-	print(obs_data)
-	print(identify.causal_identification(G, X, Y, False))
-
-	# Check various criteria
-	satisfied_BD = adjustment.check_admissibility(G, X, Y)
-	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
-	satisfied_FD = frontdoor.constructive_FD(G, X, Y)
-	satisfied_Tian = tian.check_Tian_criterion(G, X)
-	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
-
-	# Assume satisfied_BD == True
-	if satisfied_BD == True:
-		Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
-		# print(f"{Z} is admisslbe w.r.t. {X} and {Y} in G")
-
-	# Update SCM equations with randomized equations for each Xi in X
-	for Xi in X:
-		scm.equations[Xi] = statmodules.randomized_equation
-
-	intv_data = scm.generate_samples(1000000)[topo_V]
-
-	alpha = 0.05
-	z_score = norm.ppf(1 - alpha / 2)
+def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100):
+	z_score = norm.ppf(1 - alpha_CI / 2)
 	variance_threshold = 100
 
 	ATE = {}
 	VAR = {}
 	truth = {}
 
-	# Compute the ground truth for causal effect
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
 
-	for _, x_val in X_values_combinations.iterrows():
-		mask = (intv_data[X] == x_val.values).all(axis=1)
-		truth[tuple(x_val)] = intv_data.loc[mask, Y].mean().iloc[0]
+	Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
 
 	# Compute causal effect estimations
 	if not Z:
 		for _, x_val in X_values_combinations.iterrows():
 			mask = (obs_data[X] == x_val.values).all(axis=1)
 			ATE[tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
-			variance_val = obs_data.loc[mask, Y].std().iloc[0]
-			VAR[tuple(x_val)] = VAR.get(tuple(x_val), 0) + variance_val
+			VAR[tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
 	else:
 		L = 2
 		kf = KFold(n_splits=L, shuffle=True)
@@ -118,9 +80,6 @@ if __name__ == "__main__":
 			ATE[tuple(x_val)] /= L
 			VAR[tuple(x_val)] /= L
 
-	# Evaluate performance
-	performance = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE.values()))))
-	print("Performance:", performance)
 
 	lower_CI = {}
 	upper_CI = {}
@@ -130,7 +89,43 @@ if __name__ == "__main__":
 		upper_x = (mean_ATE_x + z_score * VAR[tuple(x_val)] * (len(obs_data) ** (-1/2)) )
 		lower_CI[tuple(x_val)] = lower_x
 		upper_CI[tuple(x_val)] = upper_x
-		print(tuple(x_val), mean_ATE_x, (lower_x, upper_x) )
+
+	return ATE, VAR, lower_CI, upper_CI
+
+if __name__ == "__main__":
+	# Generate random SCM and preprocess the graph
+	scm, X, Y = random_generator.Random_SCM_Generator(
+		num_observables=10, num_unobservables=0, num_treatments=5, num_outcomes=1,
+		condition_ID=True, condition_BD=True, condition_mSBD=True, 
+		condition_FD=False, condition_Tian=True, condition_gTian=True
+	)
+	G = scm.graph
+	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
+	topo_V = graph.find_topological_order(G)
+	obs_data = scm.generate_samples(10000)[topo_V]
+
+	G = scm.graph
+	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
+	topo_V = graph.find_topological_order(G)
+	obs_data = scm.generate_samples(10000)[topo_V]
+
+	print(obs_data)
+	print(identify.causal_identification(G, X, Y, False))
+
+	# Check various criteria
+	satisfied_BD = adjustment.check_admissibility(G, X, Y)
+	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
+	satisfied_FD = frontdoor.constructive_FD(G, X, Y)
+	satisfied_Tian = tian.check_Tian_criterion(G, X)
+	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
+
+	truth = statmodules.ground_truth(scm, obs_data, X, Y)
+	ATE, VAR, lower_CI, upper_CI = estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100)
+
+
+	# Evaluate performance
+	performance = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE.values()))))
+	print("Performance:", performance)
 
 	rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE.values()))
 	print(f"Spearman Rank correlation coefficient: {rank_correlation}")

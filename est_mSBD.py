@@ -21,58 +21,20 @@ import statmodules
 pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 
-if __name__ == "__main__":
-	# Generate random SCM and preprocess the graph
-	scm, X, Y = random_generator.Random_SCM_Generator(
-		num_observables=10, num_unobservables=5, num_treatments=4, num_outcomes=1,
-		condition_ID=True, condition_BD=False, condition_mSBD=True, 
-		condition_FD=False, condition_Tian=True, condition_gTian=True
-	)
-	G = scm.graph
-	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
-	topo_V = graph.find_topological_order(G)
-	obs_data = scm.generate_samples(10000)[topo_V]
-
-	print(obs_data)
-	print(identify.causal_identification(G, X, Y, False))
-
-	# Check various criteria
-	satisfied_BD = adjustment.check_admissibility(G, X, Y)
-	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
-	satisfied_FD = frontdoor.constructive_FD(G, X, Y)
-	satisfied_Tian = tian.check_Tian_criterion(G, X)
-	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
-
+def estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100):
 	# Assume satisfied_mSBD == True
 	dict_X, dict_Z, dict_Y = mSBD.check_SAC_with_results(G,X,Y, minimum = True)
-	m = len(X)
+	X_list = list(tuple(dict_X.values()))
 	mSBD_length = len(dict_X)
 
-	W_list = []
-	for idx in range(mSBD_length):
-		W_list.append( dict_Y[f'Y{idx}'] + dict_Z[f'Z{idx+1}'] )
-	X_list = list(tuple(dict_X.values()))
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
 
-	# Update SCM equations with randomized equations for each Xi in X
-	for Xi in X:
-		scm.equations[Xi] = statmodules.randomized_equation
+	m = len(X)
 
-	intv_data = scm.generate_samples(1000000)[topo_V]
-
-	alpha = 0.05
-	z_score = norm.ppf(1 - alpha / 2)
-	variance_threshold = 100
+	z_score = norm.ppf(1 - alpha_CI / 2)
 
 	ATE = {}
 	VAR = {}
-	truth = {}
-
-	# Compute the ground truth for causal effect
-	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
-
-	for _, x_val in X_values_combinations.iterrows():
-		mask = (intv_data[X] == x_val.values).all(axis=1)
-		truth[tuple(x_val)] = intv_data.loc[mask, Y].mean().iloc[0]
 
 	all_Z = []
 	for each_Z_list in list(tuple(dict_Z.values())):
@@ -82,19 +44,13 @@ if __name__ == "__main__":
 	if not all_Z:
 		for _, x_val in X_values_combinations.iterrows():
 			mask = (obs_data[X] == x_val.values).all(axis=1)
-			causal_effect_estimation[tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
+			ATE[tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
+			VAR[tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
 	else:
 		L = 2
 		kf = KFold(n_splits=L, shuffle=True)
 		col_feature = list(set(all_Z + X))
 		col_label = Y
-
-		# mu3(X3, {Z3, Y2}, X2, {Z2, Y1}, X1, {Z1}) := E[Y3 | X3, Z3, Y2, X2, Z2, Y1, X1, Z1]
-		# check_mu3(X2, {Z2, Y1}, X1, {Z1}) := E[Y3 | x3, Z3, Y2, X2, Z2, Y1, X1, Z1]
-		# mu2(X2, {Z2, Y1}, X1, {Z1}) := E[check_mu3 | X2, Z2, Y1, X1, Z1]
-		# check_mu2(x2, {Z2, Y1}, X1, {Z1}) := E[check_mu3 | x2, Z2, Y1, X1, Z1]
-		# mu1(X1, {Z1}) := E[check_mu2 | X1, Z1]
-		# check_mu1(X1, {Z1}) := E[check_mu2 | x1, Z1]
 
 		mu_models = {}
 		mu_eval_test_dict = {}
@@ -146,7 +102,8 @@ if __name__ == "__main__":
 					if len(dict_Z[f'Z{i}']) > 0:
 						if len(obs_test) < 500:
 							pi_XZ = statmodules.entropy_balancing(obs = obs_test, 
-																	x_val = x_val.values[X.index(dict_X[f'X{i}'][0])], dict_X[f'X{i}'], 
+																	x_val = x_val.values[X.index(dict_X[f'X{i}'][0])], 
+																	X = dict_X[f'X{i}'], 
 																	Z = list(set(col_feature) - set(dict_X[f'X{i}'])), 
 																	col_feature_1 = f'check_mu_{i}', 
 																	col_feature_2 = f'mu_{i}')
@@ -193,10 +150,6 @@ if __name__ == "__main__":
 			ATE[tuple(x_val)] /= L
 			VAR[tuple(x_val)] /= L
 
-	# Evaluate performance
-	performance = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE.values()))))
-	print("Performance:", performance)
-
 	lower_CI = {}
 	upper_CI = {}
 
@@ -206,7 +159,39 @@ if __name__ == "__main__":
 		upper_x = (mean_ATE_x + z_score * VAR[tuple(x_val)] * (len(obs_data) ** (-1/2)) )
 		lower_CI[tuple(x_val)] = lower_x
 		upper_CI[tuple(x_val)] = upper_x
-		print(tuple(x_val), mean_ATE_x, (lower_x, upper_x) )
+	
+	return ATE, VAR, lower_CI, upper_CI
+
+if __name__ == "__main__":
+	# Generate random SCM and preprocess the graph
+	scm, X, Y = random_generator.Random_SCM_Generator(
+		num_observables=10, num_unobservables=5, num_treatments=4, num_outcomes=1,
+		condition_ID=True, condition_BD=False, condition_mSBD=True, 
+		condition_FD=False, condition_Tian=True, condition_gTian=True
+	)
+
+	G = scm.graph
+	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
+	topo_V = graph.find_topological_order(G)
+	obs_data = scm.generate_samples(10000)[topo_V]
+
+	print(obs_data)
+	print(identify.causal_identification(G, X, Y, False))
+
+	# Check various criteria
+	satisfied_BD = adjustment.check_admissibility(G, X, Y)
+	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
+	satisfied_FD = frontdoor.constructive_FD(G, X, Y)
+	satisfied_Tian = tian.check_Tian_criterion(G, X)
+	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
+
+	truth = statmodules.ground_truth(scm, obs_data, X, Y)
+	ATE, VAR, lower_CI, upper_CI = estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100)
+
+
+	# Evaluate performance
+	performance = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE.values()))))
+	print("Performance:", performance)
 
 	rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE.values()))
 	print(f"Spearman Rank correlation coefficient: {rank_correlation}")

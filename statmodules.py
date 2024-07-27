@@ -11,10 +11,31 @@ from scipy.optimize import minimize
 from scipy.stats import norm
 import copy
 from scipy import stats
+from itertools import product
 
-def randomized_equation(**args):
-	num_samples = args.pop('num_sample')
-	return np.random.binomial(1, 0.5, num_samples)
+import graph 
+
+def ground_truth(scm, obs_data, X, Y):
+	def randomized_equation(**args):
+		num_samples = args.pop('num_sample')
+		return np.random.binomial(1, 0.5, num_samples)
+	# Update SCM equations with randomized equations for each Xi in X
+
+	G = scm.graph
+	topo_V = graph.find_topological_order(G)
+
+	truth = {}
+	for Xi in X:
+		scm.equations[Xi] = randomized_equation
+	intv_data = scm.generate_samples(1000000)[topo_V]
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
+
+	for _, x_val in X_values_combinations.iterrows():
+		mask = (intv_data[X] == x_val.values).all(axis=1)
+		truth[tuple(x_val)] = intv_data.loc[mask, Y].mean().iloc[0]
+	return truth 
+
+
 
 def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=5, batch_size=100):
 	col_feature = X + Z

@@ -41,10 +41,11 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.unID1() 
 	# [graph_dict, node_positions, X, Y] = examples.unID2() 
 	# [graph_dict, node_positions, X, Y] = examples.Rina1() 
+	[graph_dict, node_positions, X, Y] = examples.Verma2() 
 	
 	# Generate the random graph 
-	[graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator(num_observables = 10, num_unobservables = 5, num_treatments = 2, num_outcomes = 1, 
-																			condition_ID = True, condition_BD = True, condition_mSBD = True, condition_FD = True, condition_Tian = True, condition_gTian = True)
+	# [graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator(num_observables = 10, num_unobservables = 3, num_treatments = 3, num_outcomes = 1, 
+	# 																		condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False, condition_Tian = True, condition_gTian = True)
 	# graph_dict = {'U_V1_X3': ['V1', 'X3'], 'V1': ['X1'], 'U_V1_X2': ['X2', 'V1'], 'X2': ['X1', 'V1', 'V2', 'Y1'], 'U_V1_Y1': ['Y1', 'V1'], 'Y1': [], 'X3': ['X2', 'X1', 'V1'], 'U_X1_X3': ['X3', 'X1'], 'X1': ['V2'], 'V2': ['Y1']}
 	# X = ['X1','X2']; Y = ['Y1']; node_positions = None
 	G = graph.create_acyclic_graph(graph_dict=graph_dict, an_Y_graph_TF = False, Y = None, node_positions = node_positions)
@@ -58,12 +59,11 @@ if __name__ == "__main__":
 	
 
 	# Visualize the graph 
-	# graph.visualize(G)
+	graph.visualize(G)
 	
-
 	# Identify the causal effect P(Y | do(X)) from G 
 	# G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
-	print( identify.causal_identification(G,X,Y, False) )
+	print( identify.causal_identification(G,X,Y, latex = True, copyTF=False) )
 
 
 	# Draw the C-tree and AC-tree 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
 	# identify.draw_AC_tree(G,X,Y)
 
 	# Copy the graph for comparing with Fusion
-	# pyperclip.copy(graph.graph_dict_to_fusion_graph(graph_dict))
+	pyperclip.copy(graph.graph_dict_to_fusion_graph(graph_dict))
 	
 
 

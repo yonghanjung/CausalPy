@@ -11,6 +11,32 @@ import mSBD
 import frontdoor
 import tian
 
+def Verma2():
+	graph_dict = {
+		"U_XV2": ["V2","X"],
+		"U_V2Y": ["V2","Y"],
+		"U_V1V3": ["V1","V3"],
+		"X": ["V1"],
+		"V1": ["V2"],
+		"V2": ["V3"],
+		"V3": ["Y"],
+		"Y": []
+	}
+	node_positions = {
+		"U_XV2": (100,10),
+		"U_V2Y": (300,10),
+		"U_V1V3": (200,-10),
+		"X": (0,0),
+		"V1": (100,0),
+		"V2": (200,0),
+		"V3": (300,0),
+		"Y": (400,0)
+	}
+	X = ["X"]
+	Y = ["Y"]
+
+	return [graph_dict, node_positions, X, Y]
+
 
 def Tian1():
 	graph_dict = {

@@ -129,6 +129,11 @@ def generalized_Tian_estimand(G, X, Y, latex, topo_V = None):
 			estimand = f"{Q_V_SX}{Q_SX}"
 	return estimand 
 
+'''
+Tian's adjustment
+1. topo_V
+2. 
+'''
 
 def Tian_estimand(G, X, Y, latex, topo_V = None):
 	if topo_V == None:
@@ -193,3 +198,11 @@ def Tian_estimand(G, X, Y, latex, topo_V = None):
 		else:
 			estimand = f"{Q_V_SX}{Q_SX}"
 	return estimand 
+
+
+
+
+
+
+
+
