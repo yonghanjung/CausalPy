@@ -319,6 +319,91 @@ def BD_minimum3():
 
 	return [graph_dict, node_positions, X, Y]
 
+def BNS1():
+	graph_dict = {
+		"C": ["X", "A", "B", "Y"],
+		"X": ["A"],
+		"A": ["B", "Y"],
+		"B": ["Y"],
+		"U_XB": ["X", "B"],
+		"U_XY": ["X", "Y"]
+	}
+	node_positions = {
+		"C": (75,50),
+		"X": (0,0),
+		"A": (50,0),
+		"B": (100,0),
+		"Y": (150,0),
+		"U_XB": (50,-10), 
+		"U_XY": (70,-10)
+	}
+	X = ["X"]
+	Y = ["Y"]
+
+	return [graph_dict, node_positions, X, Y]
+
+def BNS2():
+	graph_dict = {
+		"C1": ["Z1", "X", "M"],
+		"C2": ["Z1", "X", "M"],
+		"Z1": ["Z2"],
+		"Z2": ["X"],
+		"X": ["M"],
+		"M": ["Y"],
+		"U_C1Z2": ["C1", "Z2"],
+		"U_C2Y": ["C2", "Y"],
+		"U_Z1X": ["Z1", "X"]
+	}
+	node_positions = {
+		"C1": (100,25),
+		"C2": (150,50),
+		"Z1": (0,0),
+		"Z2": (50,0),
+		"X": (100,0),
+		"M": (150,0),
+		"Y": (200,0),
+		"U_C1Z2": (77,10), 
+		"U_C2Y": (180,25),
+		"U_Z1X": (50,-10)
+	}
+	X = ["X"]
+	Y = ["Y"]
+
+	return [graph_dict, node_positions, X, Y]
+
+def BNS3():
+	graph_dict = {
+		"W": ["Y"],
+		"C": ["X", "Y"], 
+		"Z": ["X"],
+		"X": ["M", "Y"],
+		"M": ["B"],
+		"B": ["Y"],
+		"U_WZ": ["W", "Z"],
+		"U_WX": ["W", "X"],
+		"U_ZM": ["Z", "M"],
+		"U_CB": ["C", "B"],
+		"U_CY": ["C", "Y"],
+	}
+	node_positions = {
+		"W": (50,25),
+		"Z": (0,0),
+		"X": (50,0),
+		"M": (100,0),
+		"B": (150,0),
+		"C": (150,25),
+		"Y": (200,0),
+		"U_WZ": (25,12), 
+		"U_WX": (50,12),
+		"U_ZM": (50,-10),
+		"U_CB": (150,12),
+		"U_CY": (180,12)
+	}
+	X = ["X"]
+	Y = ["Y"]
+
+	return [graph_dict, node_positions, X, Y]
+
 def BD_vdZ():
 	graph_dict = {
 		"X1": ["Y1", "Z1"],

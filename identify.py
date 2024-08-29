@@ -61,14 +61,14 @@ def ID_return_Ctree(G, X, Y):
 	for i, Di in enumerate(c_components_D):
 		Sj = graph.find_c_components(G, Di)
 		c_components_series = [Sj]
-		c_operations_series = ["\u03B4"] # delta 
+		c_operations_series = ["\u03B4"] # delta -> Sj 
 		W = Sj
 		# Repeat process to check identifiability
 		while True:
 			G_W = graph.subgraphs(G,W)
 			A = graph.find_ancestor(G_W, Di)
 			if set(A) == set(Di): 
-				if Di != W:
+				if set(Di) != set(W):
 					c_components_series.append(A)
 					c_operations_series.append("\u03A3")
 				break
@@ -79,7 +79,7 @@ def ID_return_Ctree(G, X, Y):
 			c_operations_series.append("\u03A3")
 			subgraph_A = graph.subgraphs(G,A)
 			S_ = graph.find_c_components(subgraph_A, Di)
-			if S_ != A:
+			if set(S_) != set(A):
 				c_components_series.append(S_)
 				c_operations_series.append("\u03B4")
 			W = S_
@@ -318,6 +318,35 @@ def draw_C_tree(G,X,Y,save_path = None):
 					
 # 	return [1, ID_dict_components, ID_dict_operations]
 
+def return_AC_tree(G, X, Y):
+	[ID_constant, ID_dict_components, ID_dict_operations] = ID_return_Ctree(G, X, Y)
+	if ID_constant == -1: 
+		# print("P(Y | do(X)) = P(Y)")
+		return None 
+	
+	elif ID_constant != 1:
+		return None 
+
+	# Initialize dictionaries to hold the adjusted components and operations
+	adj_dict_components = {i: [] for i in ID_dict_components.keys()}
+	adj_dict_operations = {i: [] for i in ID_dict_components.keys()}
+	
+	# Iterate over each component in ID_dict_components
+	for key, values in ID_dict_components.items():
+		# Reverse iteration to find the first element satisfying the mSBD criterion
+		for elem in reversed(values):
+			W = list(elem)  # Convert elem to list if it's not already
+			R = list(graph.find_parents(G, W))  # Find the parents of Y in G
+			# Check if the mSBD criterion is satisfied
+			if mSBD.constructive_SAC_criterion(G, R, W):
+				# If satisfied, clip the list at the current element
+				index_to_keep = values.index(elem)
+				adj_dict_components[key] = values[index_to_keep:]
+				# Adjust the operations list accordingly
+				# Operations start from the element before the current one
+				adj_dict_operations[key] = ID_dict_operations[key][index_to_keep+1:]
+				break
+	return adj_dict_components, adj_dict_operations
 
 
 def draw_AC_tree(G, X, Y):

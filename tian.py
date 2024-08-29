@@ -3,6 +3,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from itertools import combinations
 
+import identify
 import adjustment
 import mSBD
 import graph
@@ -27,6 +28,13 @@ def check_Tian_criterion(G,X):
 		return True 
 	else:
 		return False
+
+def check_product_criterion(G,X,Y):
+	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
+	for adj_dict_component in adj_dict_components.values():
+		if len(adj_dict_component) > 1:
+			return False 
+	return True 
 
 def check_Generalized_Tian_criterion(G,X):
 	"""

@@ -23,7 +23,7 @@ def is_graph_in_list(new_graph, stored_graph_hashes):
 	return False
 
 
-def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False, condition_Tian = False, condition_gTian = False):
+def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False, condition_Tian = False, condition_gTian = False, condition_product = False, discrete = True, seednum = 123):
 	scm = SCM.StructuralCausalModel()
 
 	store_graph = []
@@ -35,7 +35,7 @@ def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num
 	sparcity_constant = 0.75
 	
 	while 1:
-		scm.generate_random_scm_test(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant)
+		scm.generate_random_scm_test(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant, seednum, discrete )
 		G = scm.graph
 		X = [v for v in G.nodes if v.startswith('X')]
 		Y = [v for v in G.nodes if v.startswith('Y')]
@@ -72,6 +72,7 @@ def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num
 				satisfied_FD = frontdoor.constructive_FD(G0, X0, Y0)
 				satisfied_Tian = tian.check_Tian_criterion(G0,X0)
 				satisfied_gTian = tian.check_Generalized_Tian_criterion(G0,X0)
+				satisfied_product = tian.check_product_criterion(G0, X0, Y0)
 
 				# Create a dictionary to map conditions to their satisfaction checks
 				condition_checks = {
@@ -79,7 +80,8 @@ def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num
 					"condition_mSBD": satisfied_mSBD,
 					"condition_FD": satisfied_FD,
 					"condition_Tian": satisfied_Tian,
-					"condition_gTian": satisfied_gTian
+					"condition_gTian": satisfied_gTian,
+					"condition_product": satisfied_product
 				}
 
 				# Check if all specified conditions are satisfied
@@ -97,8 +99,13 @@ def Random_SCM_Generator(num_observables, num_unobservables, num_treatments, num
 					return [scm, X, Y]
 
 
-def Random_Graph_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False, condition_Tian = False, condition_gTian = False):
+def Random_Graph_Generator(num_observables, num_unobservables, num_treatments, num_outcomes, 
+							condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False, condition_Tian = False, condition_gTian = False, condition_product = False,
+							seednum = 123):
 	''' Random graph generator '''
+	np.random.seed(seednum)
+	random.seed(seednum)
+
 	store_graph = []
 	stored_graph_hashes = set()
 	ID_store_graph = []
@@ -123,6 +130,7 @@ def Random_Graph_Generator(num_observables, num_unobservables, num_treatments, n
 			stored_graph_hashes.add(get_graph_hash(G))
 			G0, X0, Y0 = identify.preprocess_GXY_for_ID(G, X, Y)
 			ID_result = identify.ID_return_Ctree(G, X, Y)
+
 			if ID_result[0] == -1: 
 				continue 
 			elif ID_result[0] == 0: 
@@ -143,6 +151,7 @@ def Random_Graph_Generator(num_observables, num_unobservables, num_treatments, n
 				satisfied_FD = frontdoor.constructive_FD(G0, X0, Y0)
 				satisfied_Tian = tian.check_Tian_criterion(G0,X0)
 				satisfied_gTian = tian.check_Generalized_Tian_criterion(G0,X0)
+				satisfied_product = tian.check_product_criterion(G0, X0, Y0)
 
 				# Create a dictionary to map conditions to their satisfaction checks
 				condition_checks = {
@@ -150,7 +159,8 @@ def Random_Graph_Generator(num_observables, num_unobservables, num_treatments, n
 					"condition_mSBD": satisfied_mSBD,
 					"condition_FD": satisfied_FD,
 					"condition_Tian": satisfied_Tian,
-					"condition_gTian": satisfied_gTian
+					"condition_gTian": satisfied_gTian,
+					"condition_product": satisfied_product
 				}
 
 				# Check if all specified conditions are satisfied
@@ -165,4 +175,4 @@ def Random_Graph_Generator(num_observables, num_unobservables, num_treatments, n
 						break
 
 				if all_conditions_met:
-						return [graph_dict, node_positions, X, Y]
+					return [graph_dict, node_positions, X, Y]

@@ -103,7 +103,7 @@ class StructuralCausalModel:
 
 		return binary_equation
 
-	def generate_random_scm_test(self, num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.5, seed = None):
+	def generate_random_scm_test(self, num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.5, seed = None, discrete = False):
 		'''
 		Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.
 
@@ -156,16 +156,29 @@ class StructuralCausalModel:
 					is_acyclic = False
 					for var_name in all_observables:
 						parents = graph.find_parents(self.graph, [var_name])
-						# equation_type = 'binary' if var_name.startswith('X') or var_name.startswith('Y') else 'linear'
-						if var_name.startswith('X'):
-							equation_type = 'binary' 
-							equation = self.create_binary_equation(parents)
-						elif var_name.startswith('Y'):
-							equation_type = 'linear_bound' 
-							equation = self.create_random_linear_bounded_equation(parents)
+						
+						if discrete == False:
+							# equation_type = 'binary' if var_name.startswith('X') or var_name.startswith('Y') else 'linear'
+							if var_name.startswith('X'):
+								equation_type = 'binary' 
+								equation = self.create_binary_equation(parents)
+							elif var_name.startswith('Y'):
+								equation_type = 'linear_bound' 
+								equation = self.create_random_linear_bounded_equation(parents)
+							else:
+								equation_type = 'linear'
+								equation = self.create_random_linear_equation(parents)
 						else:
-							equation_type = 'linear'
-							equation = self.create_random_linear_equation(parents)
+							if var_name.startswith('X'):
+								equation_type = 'binary' 
+								equation = self.create_binary_equation(parents)
+							elif var_name.startswith('Y'):
+								equation_type = 'binary' 
+								equation = self.create_binary_equation(parents)
+							else:
+								equation_type = 'binary'
+								equation = self.create_binary_equation(parents)
+						
 						# equation = self.create_binary_equation(parents) if equation_type == 'binary' else self.create_random_linear_equation(parents)
 						noise_dist = stats.bernoulli(0.5) if equation_type == 'binary' else stats.norm(0, 0.1)
 						self.add_observed_variable(var_name, equation, parents, noise_dist)
@@ -225,7 +238,7 @@ class StructuralCausalModel:
 	# 			break  # Valid graph generated
 
 
-	def generate_random_graph(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.25):
+	def generate_random_graph(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.25, seednum = 123):
 		'''
 		Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.
 
@@ -238,6 +251,9 @@ class StructuralCausalModel:
 		Returns:
 		tuple: Graph dictionary, node positions, lists X and Y.
 		'''
+
+		np.random.seed(seednum)
+		random.seed(seednum)
 
 		# Create observable nodes
 		treatments = [f'X{i+1}' for i in range(num_treatments)]

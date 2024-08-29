@@ -37,7 +37,7 @@ def ground_truth(scm, obs_data, X, Y):
 
 
 
-def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=5, batch_size=100):
+def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=10, batch_size=100):
 	col_feature = X + Z
 	col_label = ['residual']
 	approximators = []
@@ -140,7 +140,7 @@ def learn_mu(obs, col_feature, col_label, params = None):
 	if params == None: 
 		params = {
 			'booster': 'gbtree',
-			'eta': 0.1,
+			'eta': 0.3,
 			'gamma': 0,
 			'max_depth': 10,
 			'min_child_weight': 1,
