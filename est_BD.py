@@ -9,6 +9,8 @@ from scipy.stats import norm
 import warnings
 from scipy.stats import spearmanr
 
+import time
+import random 
 import random_generator
 import graph
 import identify
@@ -94,11 +96,25 @@ def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100):
 
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
+	seednum = int(time.time())
+
+	print(f'Random seed: {seednum}')
+	np.random.seed(seednum)
+	random.seed(seednum)
+
 	scm, X, Y = random_generator.Random_SCM_Generator(
-		num_observables=10, num_unobservables=0, num_treatments=5, num_outcomes=1,
-		condition_ID=True, condition_BD=True, condition_mSBD=True, 
-		condition_FD=False, condition_Tian=True, condition_gTian=True
+		num_observables=6, num_unobservables=1, num_treatments=1, num_outcomes=1,
+		condition_ID=True, 
+		condition_BD=True, 
+		condition_mSBD=True, 
+		condition_FD=False, 
+		condition_Tian=True, 
+		condition_gTian=True,
+		condition_product = True, 
+		discrete = False, 
+		seednum = seednum 
 	)
+
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)

@@ -266,6 +266,7 @@ def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold
 					adj_dict_component_copy = copy.copy(adj_dict_component)
 
 					S0 = adj_dict_component_copy.pop(0)
+					PA_S0 = graph.find_parents(G, S0)
 					domain_S0 = [tuple(v) for v in obs_data[S0].drop_duplicates().itertuples(index=False)]
 					
 					Q_S0 = {}
@@ -306,17 +307,17 @@ def estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
 	ATE = dict()
 
-	unique_rows = obs_data[V_XY].drop_duplicates()	
-	unique_row_proportions = obs_data[V_XY].value_counts(normalize=True).reset_index(name='proportion')
-	unique_rows_with_proportions = pd.merge(unique_rows, unique_row_proportions, on=V_XY, how='left')
+	# unique_rows = obs_data[V_XY].drop_duplicates()	
+	# unique_row_proportions = obs_data[V_XY].value_counts(normalize=True).reset_index(name='proportion')
+	# unique_rows_with_proportions = pd.merge(unique_rows, unique_row_proportions, on=V_XY, how='left')
 
-	if len(unique_rows) > MC_integration_threshold:
-		unique_rows = unique_rows_with_proportions.sample(n=MC_integration_threshold, random_state = seednum)
-		# unique_rows = unique_rows_with_proportions.sample(n=MC_integration_threshold, replace = True, weights = 'proportion', random_state = seednum)
+	# if len(unique_rows) > MC_integration_threshold:
+	# 	unique_rows = unique_rows_with_proportions.sample(n=MC_integration_threshold, random_state = seednum)
+	# 	# unique_rows = unique_rows_with_proportions.sample(n=MC_integration_threshold, replace = True, weights = 'proportion', random_state = seednum)
 
 	for _, x_val in X_values_combinations.iterrows():
 		ATE[tuple(x_val)] = 0
-		for v_minus_XY in unique_rows.itertuples(index=False):
+		for v_minus_XY in obs_data[V_XY].drop_duplicates().itertuples(index=False):
 			# Compute Q[V\SX](v)
 			PA_V_SX = graph.find_parents(G, V_SX)
 			# di is the realization of Di, defined as follow: For a portion Di \intersect D_minus_Y, take its value from d_minus_y. For Di \setminus D_minus_Y, take the value from y_val.
@@ -489,7 +490,6 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_thre
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
 	seednum = int(time.time())
-	# seednum = 1724970825
 
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
@@ -501,9 +501,9 @@ if __name__ == "__main__":
 		condition_BD=False, 
 		condition_mSBD=False, 
 		condition_FD=False, 
-		condition_Tian=False, 
-		condition_gTian=False,
-		condition_product = False, 
+		condition_Tian=True, 
+		condition_gTian=True,
+		condition_product = True, 
 		discrete = True, 
 		seednum = seednum 
 	)
@@ -522,7 +522,7 @@ if __name__ == "__main__":
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 	satisfied_product = tian.check_product_criterion(G, X, Y)
 
-	print(identify.causal_identification(G, X, Y, True))
+	print(identify.causal_identification(G, X, Y, False))
 	# identify.draw_AC_tree(G,X,Y)
 
 	truth = statmodules.ground_truth(scm, obs_data, X, Y)
@@ -540,11 +540,19 @@ if __name__ == "__main__":
 		ATE_OM = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
 		ATE_DML = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
 
+		# ATE_OM_gen = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
+		# ATE_DML_gen = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
+
 
 	performance_OM = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_OM.values()))))
 	performance_DML = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_DML.values()))))
 	print("Performance (OM):", performance_OM)
 	print("Performance (DML):", performance_DML)
+
+	# performance_OM_gen = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_OM_gen.values()))))
+	# performance_DML_gen = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_DML_gen.values()))))
+	# print("Performance (OM_gen):", performance_OM_gen)
+	# print("Performance (DML_gen):", performance_DML_gen)
 
 	rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE_OM.values()))
 	print(f"Spearman Rank correlation coefficient (OM): {rank_correlation}")
