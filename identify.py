@@ -828,7 +828,20 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 	return print_estimand(causal_expression, latex, copyTF)
 
 
+def discrete_variable_in_jungDML(G, X, Y):
+	'''
+	Check what variables must be discrete 
+	'''
+	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
+	list_discrete_variables = []
 
+	for adj_dict_component in adj_dict_components.values():
+		RootA = adj_dict_component[0]
+		PA_RootA = graph.find_parents(G, RootA)
+		list_discrete_variables = list_discrete_variables + PA_RootA
+
+	list_discrete_variables = list(set(list_discrete_variables))
+	return list(set(list_discrete_variables + X + Y))
 
 	
 

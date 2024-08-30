@@ -9,6 +9,8 @@ from scipy.stats import norm
 import warnings
 import random 
 import time 
+from tabulate import tabulate
+
 
 import random_generator
 import graph
@@ -23,52 +25,90 @@ import statmodules
 pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 
-def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = "DML", entropy_balancing_sample_number = 200, B = 10, seednum = 123): 
+def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, EB_samplesize = 200, EB_boosting = 10, seednum = 123, only_OM = False): 
+	"""
+	Estimate causal effects using the mSBD method.
+
+	Parameters:
+	G : Causal graph structure.
+	X : List of treatment variables.
+	Y : List of outcome variables.
+	xval : List of values corresponding to X.
+	yval : List of values corresponding to Y.
+	obs_data : Observed data (Pandas DataFrame).
+	alpha_CI : Confidence level for interval estimates (default 0.05).
+	estimators : Method for estimation (default "DML").
+	EB_samplesize : Sample size for entropy balancing (default 200).
+	EB_boosting : Number of boosting iterations for entropy balancing (default 10).
+	seednum : Random seed for reproducibility (default 123).
+
+	Returns:
+	ATE : Estimated average treatment effect.
+	VAR : Variance of the estimate.
+	lower_CI : Lower confidence interval of the estimate.
+	upper_CI : Upper confidence interval of the estimate.
+	"""
+
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
-	# Assume satisfied_mSBD == True
+	# Sort Y and yval according to the topological order of the graph
 	topo_V = graph.find_topological_order(G)
-
 	sorted_pairs = sorted(zip(Y, yval), key=lambda pair: topo_V.index(pair[0]))
 	sorted_variables, sorted_values = zip(*sorted_pairs)
 	Y = list(sorted_variables)
 	yval = list(sorted_values)
 	dict_yval = {Y[idx]: yval[idx] for idx in range(len(Y))}
 
+	# Check for SAC criterion satisfaction and organize variables into dictionaries
 	dict_X, dict_Z, dict_Y = mSBD.check_SAC_with_results(G,X,Y, minimum = True)
 	X_list = list(tuple(dict_X.values()))
 	mSBD_length = len(dict_X)
 
-	# Compute IyY 
+	# Compute IyY: indicator for the outcome variables matching yval
 	IyY = ((obs_data[Y] == tuple(yval))*1).prod(axis=1)
 	obs_data_y = obs_data[:]
 	obs_data_y.loc[:, 'IyY'] = np.asarray(IyY)
 
+	# Create additional indicators for conditional variables
 	for idx, (key, value) in enumerate(dict_Y.items()):
 		if len(value) > 0:
 			list_dict_yval = [dict_yval[value_iter] for value_iter in value]
 			obs_data_y.loc[:, f'IyY_{idx}'] = ((obs_data[value] == list_dict_yval).all(axis=1)*1)
 
 	m = len(dict_X)
-
 	z_score = norm.ppf(1 - alpha_CI / 2)
+
+	ATE = {}
+	VAR = {}
+	lower_CI = {}
+	upper_CI = {}
+
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+
+	for estimator in list_estimators:
+		ATE[estimator] = 0
+		VAR[estimator] = 0
+		lower_CI[estimator] = 0
+		upper_CI[estimator] = 0
 
 	all_Z = []
 	for each_Z_list in list(tuple(dict_Z.values())):
 		all_Z += each_Z_list
 
-	# Compute causal effect estimations
-	if not all_Z:
-		# for _, x_val in X_values_combinations.iterrows():
-		mask = (obs_data_y[X] == xval).all(axis=1) 
-		ATE = obs_data_y.loc[mask]['IyY'].mean()
-		VAR = obs_data_y.loc[mask]['IyY'].var()
-	else:
-		ATE = 0
-		VAR = 0
-		L = 2
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
 
+	# No confounding variables, simple estimation
+	if not all_Z:
+		for estimator in list_estimators:
+			for _, x_val in X_values_combinations.iterrows():
+				mask = (obs_data_y[X] == xval).all(axis=1) 
+				ATE[estimator] = obs_data_y.loc[mask]['IyY'].mean()
+				VAR[estimator] = obs_data_y.loc[mask]['IyY'].var()
+
+	# Confounding variables present, use KFold cross-validation
+	else:
+		L = 2 # Number of folds 
 		kf = KFold(n_splits=L, shuffle=True)
 
 		mu_models = {}
@@ -77,13 +117,13 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, vari
 		check_mu_test_dict = {}
 
 		pi_eval_dict = {}
-		pi_acc_eval_dict = {}
 
 		for train_index, test_index in kf.split(obs_data_y):
 			obs_train, obs_test = obs_data_y.iloc[train_index], obs_data_y.iloc[test_index]
 			check_mu_train_dict[m+1] = obs_train['IyY'].values
 			check_mu_test_dict[m+1] = obs_test['IyY'].values
 
+			# Loop through layers in reverse order
 			for i in range(m, 0, -1):
 				col_feature = []
 				for j in range(1,i+1):
@@ -93,11 +133,13 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, vari
 					col_feature += dict_Y[f'Y{j}']
 				col_feature = sorted(col_feature, key=lambda x: topo_V.index(x))
 				
+				# Label for the current layer
 				if i == m:
 					col_label = f'IyY_{m}'
 				else:
 					col_label = f'check_mu_{i+1}'
 				
+				# Train model for the current layer
 				mu_models[i] = statmodules.learn_mu(obs_train, col_feature, col_label, params=None)
 				mu_eval_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test[col_feature]))
 				for j in range(i):
@@ -108,6 +150,7 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, vari
 						mu_eval_test_dict[i] *= obs_test[key_j]
 				obs_test.loc[:,f'mu_{i}'] = mu_eval_test_dict[i]
 				
+				# Prepare train and test sets for the next iteration
 				obs_test_x = copy.copy(obs_test)
 				obs_test_x[dict_X[f'X{i}'][0]] = xval[X.index(dict_X[f'X{i}'][0])]
 				obs_train_x = copy.copy(obs_train)
@@ -131,8 +174,8 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, vari
 						check_mu_test_dict[i] *= obs_test[key_j]
 				obs_test.loc[:, f'check_mu_{i}'] = check_mu_test_dict[i]
 
-				if estimators != "OM":
-					# if len(dict_Z[f'Z{i}']) > 0 and i > 1:
+				# Compute weights for entropy balancing (if not only outcome model)
+				if only_OM == False:
 					if i == 1 and len(dict_Y['Y0']) == 0 and len(dict_Z['Z1']) == 0: 
 						IxiX = (obs_test[dict_X[f'X{i}'][0]].values == xval[X.index(dict_X[f'X{i}'][0])]) * 1
 						P_X1_1 = np.mean(obs_test[dict_X[f'X{i}'][0]].values)
@@ -140,7 +183,7 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, vari
 						pi_XZ = IxiX/P_X1
 
 					else:
-						if len(obs_test) < entropy_balancing_sample_number:
+						if len(obs_test) < EB_samplesize:
 							pi_XZ = statmodules.entropy_balancing(obs = obs_test, 
 																	x_val = xval[X.index(dict_X[f'X{i}'][0])], 
 																	X = dict_X[f'X{i}'], 
@@ -154,16 +197,18 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, vari
 																			X = dict_X[f'X{i}'], 
 																			col_feature_1 = f'check_mu_{i}', 
 																			col_feature_2 = f'mu_{i}', 
-																			B=10, 
-																			batch_size=100)
+																			B = EB_boosting, 
+																			batch_size = EB_samplesize)
 					
 					pi_eval_dict[i] = pi_XZ
 
-			if estimators == "OM":
+			# Outcome model 
+			if only_OM:
 				OM_val = np.mean(obs_test['check_mu_1'])
-				ATE += OM_val
-				VAR += np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
+				ATE["OM"] += OM_val
+				VAR["OM"] += np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
 
+			# Double machine learning (DML), Outcome model (OM) and inverse probability weighting (IPW)
 			else:
 				pseudo_outcome = np.zeros(len(pi_eval_dict[m]))
 				pi_accumulated_dict = {}
@@ -179,30 +224,30 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, vari
 				OM_val = np.mean(obs_test['check_mu_1'])
 				IPW_val = np.mean(pi_accumulated_dict[m] * check_mu_test_dict[m+1])
 				AIPW_val = np.mean(pseudo_outcome)
-				variance_val = np.mean( (pseudo_outcome - AIPW_val) ** 2 )
 
-				if variance_val >= variance_threshold:
-					ATE += OM_val
-					VAR += np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
-				else:
-					ATE += AIPW_val
-					VAR += variance_val
+				ATE["OM"] += OM_val
+				VAR["OM"] += np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
+				
+				ATE["DML"] += AIPW_val
+				VAR["DML"] += np.mean( (pseudo_outcome - AIPW_val) ** 2 )
+
+				ATE["IPW"] += IPW_val
+				VAR["IPW"] += np.mean( (pi_accumulated_dict[m] * check_mu_test_dict[m+1] - IPW_val) ** 2 )
 		
-		ATE /= L
-		VAR /= L
+		for estimator in list_estimators:
+			ATE[estimator] /= L
+			VAR[estimator] /= L
 
-	lower_CI = {}
-	upper_CI = {}
-
-	mean_ATE = ATE
-	lower_x = (mean_ATE - z_score * VAR * (len(obs_data_y) ** (-1/2)) )
-	upper_x = (mean_ATE + z_score * VAR * (len(obs_data_y) ** (-1/2)) )
-	lower_CI = lower_x
-	upper_CI = upper_x
+	for estimator in list_estimators:
+		mean_ATE = ATE[estimator]
+		lower_x = (mean_ATE - z_score * VAR[estimator] * (len(obs_data_y) ** (-1/2)) )
+		upper_x = (mean_ATE + z_score * VAR[estimator] * (len(obs_data_y) ** (-1/2)) )
+		lower_CI[estimator] = lower_x
+		upper_CI[estimator] = upper_x
 	
 	return ATE, VAR, lower_CI, upper_CI
 
-def estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = "DML", seednum = 123):
+def estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = 200, EB_boosting = 10, seednum = 123, only_OM = False):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -220,6 +265,19 @@ def estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100, 
 
 	ATE = {}
 	VAR = {}
+	lower_CI = {}
+	upper_CI = {}
+
+	if only_OM:
+		list_estimators = ["OM"]
+	else:
+		list_estimators = ["OM", "IPW", "DML"]
+
+	for estimator in list_estimators:
+		ATE[estimator] = {}
+		VAR[estimator] = {}
+		lower_CI[estimator] = {}
+		upper_CI[estimator] = {}
 
 	all_Z = []
 	for each_Z_list in list(tuple(dict_Z.values())):
@@ -227,10 +285,11 @@ def estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100, 
 
 	# Compute causal effect estimations
 	if not all_Z:
-		for _, x_val in X_values_combinations.iterrows():
-			mask = (obs_data[X] == x_val.values).all(axis=1)
-			ATE[tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
-			VAR[tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
+		for estimator in list_estimators:
+			for _, x_val in X_values_combinations.iterrows():
+				mask = (obs_data[X] == x_val.values).all(axis=1)
+				ATE[estimator][tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
+				VAR[estimator][tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
 	else:
 		L = 2
 		kf = KFold(n_splits=L, shuffle=True)
@@ -278,9 +337,16 @@ def estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100, 
 					check_mu_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test_x[col_feature]))
 					obs_test.loc[:, f'check_mu_{i}'] = check_mu_test_dict[i]
 
-					if estimators != "OM":
-						if len(dict_Z[f'Z{i}']) > 0:
-							if len(obs_test) < 500:
+					# If only_OM == False, then the weight should be computed. 
+					if only_OM == False:
+						if i == 1 and len(dict_Z['Z1']) == 0: 
+							IxiX = (obs_test[dict_X[f'X{i}'][0]].values == x_val.values[X.index(dict_X[f'X{i}'][0])]) * 1
+							P_X1_1 = np.mean(obs_test[dict_X[f'X{i}'][0]].values)
+							P_X1 = P_X1_1 * obs_test[dict_X[f'X{i}'][0]].values + (1-P_X1_1) * (1-obs_test[dict_X[f'X{i}'][0]].values )
+							pi_XZ = IxiX/P_X1
+							
+						else:
+							if len(obs_test) < EB_samplesize:
 								pi_XZ = statmodules.entropy_balancing(obs = obs_test, 
 																		x_val = x_val.values[X.index(dict_X[f'X{i}'][0])], 
 																		X = dict_X[f'X{i}'], 
@@ -294,20 +360,17 @@ def estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100, 
 																				X = dict_X[f'X{i}'], 
 																				col_feature_1 = f'check_mu_{i}', 
 																				col_feature_2 = f'mu_{i}', 
-																				B=2, 
-																				batch_size=100)
-						else:
-							IxiX = (obs_test[dict_X[f'X{i}'][0]].values == x_val.values[X.index(dict_X[f'X{i}'][0])]) * 1
-							P_X1_1 = np.mean(obs_test[dict_X[f'X{i}'][0]].values)
-							P_X1 = P_X1_1 * obs_test[dict_X[f'X{i}'][0]].values + (1-P_X1_1) * (1-obs_test[dict_X[f'X{i}'][0]].values )
-							pi_XZ = IxiX/P_X1
+																				B = EB_boosting, 
+																				batch_size = EB_samplesize)
 						pi_eval_dict[i] = pi_XZ
 
-				if estimators == "OM":
+				# If only_OM == True (only returning OM, then no need to compute PW)
+				if only_OM:
 					OM_val = np.mean(obs_test['check_mu_1'])
-					ATE[tuple(x_val)] = ATE.get(tuple(x_val), 0) + OM_val
-					VAR[tuple(x_val)] = VAR.get(tuple(x_val), 0) + np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_val
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
 
+				# If only_OM == False (returning DML, OM, PW)
 				else:
 					pseudo_outcome = np.zeros(len(pi_eval_dict[m]))
 					pi_accumulated_dict = {}
@@ -323,43 +386,52 @@ def estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100, 
 					OM_val = np.mean(obs_test['check_mu_1'])
 					IPW_val = np.mean(pi_accumulated_dict[m] * check_mu_test_dict[m+1])
 					AIPW_val = np.mean(pseudo_outcome)
-					variance_val = np.mean( (pseudo_outcome - AIPW_val) ** 2 )
 
-					if variance_val >= variance_threshold:
-						ATE[tuple(x_val)] = ATE.get(tuple(x_val), 0) + OM_val
-						VAR[tuple(x_val)] = VAR.get(tuple(x_val), 0) + np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
-					else:
-						ATE[tuple(x_val)] = ATE.get(tuple(x_val), 0) + AIPW_val
-						VAR[tuple(x_val)] = VAR.get(tuple(x_val), 0) + variance_val
-		
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_val
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
+					
+					ATE["DML"][tuple(x_val)] = ATE["DML"].get(tuple(x_val), 0) + AIPW_val
+					VAR["DML"][tuple(x_val)] = VAR["DML"].get(tuple(x_val), 0) + np.mean( (pseudo_outcome - AIPW_val) ** 2 )
+
+					ATE["IPW"][tuple(x_val)] = ATE["IPW"].get(tuple(x_val), 0) + IPW_val
+					VAR["IPW"][tuple(x_val)] = VAR["IPW"].get(tuple(x_val), 0) + np.mean( (pi_accumulated_dict[m] * check_mu_test_dict[m+1] - IPW_val) ** 2 )
+
 		for _, x_val in X_values_combinations.iterrows():
-			ATE[tuple(x_val)] /= L
-			VAR[tuple(x_val)] /= L
+			for estimator in list_estimators:
+				ATE[estimator][tuple(x_val)] /= L
+				VAR[estimator][tuple(x_val)] /= L
 
-	lower_CI = {}
-	upper_CI = {}
 
 	for _, x_val in X_values_combinations.iterrows():
-		mean_ATE_x = ATE[tuple(x_val)]
-		lower_x = (mean_ATE_x - z_score * VAR[tuple(x_val)] * (len(obs_data) ** (-1/2)) )
-		upper_x = (mean_ATE_x + z_score * VAR[tuple(x_val)] * (len(obs_data) ** (-1/2)) )
-		lower_CI[tuple(x_val)] = lower_x
-		upper_CI[tuple(x_val)] = upper_x
+		for estimator in list_estimators:
+			mean_ATE_x = ATE[estimator][tuple(x_val)]
+			lower_x = (mean_ATE_x - z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			upper_x = (mean_ATE_x + z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			lower_CI[estimator][tuple(x_val)] = lower_x
+			upper_CI[estimator][tuple(x_val)] = upper_x
 	
 	return ATE, VAR, lower_CI, upper_CI
 
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
 	# seednum = int(time.time())
-	seednum = 1724356263
+	seednum = 1725047670
+
+	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
 	random.seed(seednum)
 
 	scm, X, Y = random_generator.Random_SCM_Generator(
 		num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
-		condition_ID=True, condition_BD=False, condition_mSBD=True, 
-		condition_FD=False, condition_Tian=True, condition_gTian=True,
-		discrete = False, seednum = seednum 
+		condition_ID=True, 
+		condition_BD=False, 
+		condition_mSBD=True, 
+		condition_FD=False, 
+		condition_Tian=True, 
+		condition_gTian=True,
+		condition_product = True, 
+		discrete = False, 
+		seednum = seednum 
 	)
 
 	G = scm.graph
@@ -378,16 +450,24 @@ if __name__ == "__main__":
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 
 	truth = statmodules.ground_truth(scm, obs_data, X, Y)
+
+	### EB_samplesize = 50 with EB_boosting = 50 is TERRIBLE!!! (IPW         | 1287.726 ). It takes 234
+	start_time = time.process_time()
+	EB_samplesize = 500 
+	EB_boosting = 5
+	ATE, VAR, lower_CI, upper_CI = estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting, seednum = 123, only_OM = False)
+	end_time = time.process_time()
+	print(f'EB_samplesize: {EB_samplesize} with EB_boosting:{EB_boosting} takes {end_time - start_time}')
+
+	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
 	
-	ATE_DML, VAR_DML, lower_CI_DML, upper_CI_DML = estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = "DML")
-	ATE_OM, VAR_OM, lower_CI_OM, upper_CI_OM = estimate_mSBD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = "OM")
+	print("Performance")
+	print(performance_table)
 
-	# Evaluate performance
-	performance_DML = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_DML.values()))))
-	performance_OM = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_OM.values()))))
-	print("Performance:", performance_DML, performance_OM)
+	print("Rank Correlation")
+	print(rank_correlation_table)
 
-	# rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE.values()))
-	# print(f"Spearman Rank correlation coefficient: {rank_correlation}")
-	# print(f"P-value: {rank_p_values}")
+	print("=" * 20)
+
+	
 

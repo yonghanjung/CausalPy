@@ -12,8 +12,13 @@ from scipy.stats import norm
 import copy
 from scipy import stats
 from itertools import product
-
+from tabulate import tabulate
 import graph 
+from scipy.stats import spearmanr
+from scipy.stats import norm
+
+from joblib import Parallel, delayed
+
 
 def ground_truth(scm, obs_data, X, Y):
 	def randomized_equation(**args):
@@ -71,13 +76,18 @@ def entropy_balancing(obs, x_val, X, Z, col_feature_1 = 'mu_xZ', col_feature_2 =
 		# \sum_{i=1}^{n} W_i X_i - n = 0
 		return np.sum(W * IxX) - n
 
-	# def constraint2(W, IxX, Cval):
-	# 	# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
-	# 	return np.sum(W * IxX * Cval) - np.sum(Cval)
+	# Define the Jacobian
+	def constraint1_jac(W, IxX):
+		# \sum_{i=1}^{n} W_i X_i - n = 0
+		return IxX
 
-	def constraint3(W, IxX, Cval1, Cval2):
+	def constraint2(W, IxX, Cval1, Cval2):
 		# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
 		return np.sum(W * IxX * Cval1) - np.sum(Cval2)
+
+	def constraint2_jac(W, IxX, Cval1, Cval2):
+		# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
+		return IxX * Cval1
 
 	IxX = np.array((obs[X] == x_val).prod(axis=1))
 	n = len(obs)
@@ -91,12 +101,8 @@ def entropy_balancing(obs, x_val, X, Z, col_feature_1 = 'mu_xZ', col_feature_2 =
 	W0 = np.clip(W0, 1e-10, None)
 
 	# Define the constraints in the format required by scipy.optimize.minimize
-	constraints = [{'type': 'eq', 'fun': constraint1, 'args': (IxX,)}]
-	constraints.append({'type': 'eq', 'fun': constraint3, 'args': (IxX, mu_XZ, mu_xZ)})
-
-	# for dimidx in range(len(Z)):
-	# 	constraints.append({'type': 'eq', 'fun': constraint2, 'args': (IxX, f_C[:, dimidx],)})
-	# 	# constraints.append({'type': 'eq', 'fun': constraint2, 'args': (IxX, f_C[:, dimidx] ** 2,)})
+	constraints = [{'type': 'eq', 'fun': constraint1, 'jac': constraint1_jac, 'args': (IxX,)}]
+	constraints.append({'type': 'eq', 'fun': constraint2, 'jac': constraint2_jac, 'args': (IxX, mu_XZ, mu_xZ)})
 
 	# Define bounds for W (W_i > 0)
 	bounds = [(1e-5, None) for _ in range(n)]
@@ -247,3 +253,21 @@ def estimate_odds_ratio(data_0, data_1, col_feature, n_sample, params = None):
 	# Step 4: Construct the XGBoost model
 	model = learn_pi(total_samples, col_feature, col_label, params)
 	return model
+
+def compute_performance(truth, ATE):
+	performance = {}
+	rank_correlation_pvalue = {}
+
+	for estimator in list(ATE.keys()):
+		performance[estimator] = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE[estimator].values()))))
+		rank_correlation_pvalue[estimator] = list( spearmanr(list(truth.values()), list(ATE[estimator].values())) )
+	
+	performance_table_data = [[estimator] + [performance[estimator]] for estimator in performance]
+	performance_table_header = ["Estimator", "Error"]
+	performance_table = tabulate(performance_table_data, tablefmt='grid', floatfmt=".3f", headers = performance_table_header)
+
+	rank_correlation_table_data = [[estimator] + [value for value in rank_correlation_pvalue[estimator]] for estimator in rank_correlation_pvalue]
+	rank_correlation_table_header = ["Estimator", "Rank Correlation", "P-value"]
+	rank_correlation_table = tabulate(rank_correlation_table_data, tablefmt='grid', floatfmt=".3f", headers = rank_correlation_table_header)
+
+	return performance_table, rank_correlation_table

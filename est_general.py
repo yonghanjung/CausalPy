@@ -27,43 +27,46 @@ pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold=100, estimators="DML", seednum=123):
+def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_samplesize = 100, EB_boosting = 5):
 	"""
-    Estimate the Average Treatment Effect (ATE) using the general framework.
+	Estimate the Average Treatment Effect (ATE) using the general framework.
 
-    Parameters:
-    G : graph structure representing the causal graph.
-    X : list of variables to be conditioned on.
-    Y : list of outcome variables.
-    y_val : list of values corresponding to Y.
-    obs_data : observed data in the form of a DataFrame.
-    alpha_CI : confidence level for interval estimates (default is 0.05).
-    variance_threshold : threshold for variance estimation (default is 100).
-    estimators : method used for estimation (default is "DML").
-    seednum : random seed for reproducibility (default is 123).
-    
-    Returns:
-    A dictionary where the keys are tuples of X values and the values are the estimated ATE.
-    """
+	Parameters:
+	G : graph structure representing the causal graph.
+	X : list of variables to be conditioned on.
+	Y : list of outcome variables.
+	y_val : list of values corresponding to Y.
+	obs_data : observed data in the form of a DataFrame.
+	alpha_CI : confidence level for interval estimates (default is 0.05).
+	variance_threshold : threshold for variance estimation (default is 100).
+	estimators : method used for estimation (default is "DML").
+	seednum : random seed for reproducibility (default is 123).
+	
+	Returns:
+	A dictionary where the keys are tuples of X values and the values are the estimated ATE.
+	"""
 
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+
+
 	def get_values(variables, Superset_Values, X, Y, superset_values, x_val, y_val):
 		"""
-        Get the realized values for the specified variables.
+		Get the realized values for the specified variables.
 
-        Parameters:
-        variables : list of variables whose values need to be retrieved.
-        superset_values : Series containing the values of the superset of variables.
-        X : list of variables in X.
-        Y : list of variables in Y.
-        x_val : list of values corresponding to X.
-        y_val : list of values corresponding to Y.
+		Parameters:
+		variables : list of variables whose values need to be retrieved.
+		superset_values : Series containing the values of the superset of variables.
+		X : list of variables in X.
+		Y : list of variables in Y.
+		x_val : list of values corresponding to X.
+		y_val : list of values corresponding to Y.
 
-        Returns:
-        A list of values for the specified variables.
-        """
+		Returns:
+		A list of values for the specified variables.
+		"""
 		return [
 			getattr(superset_values, variable) if variable in Superset_Values else 
 			(x_val[X.index(variable)] if variable in X else 
@@ -73,20 +76,20 @@ def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold
 
 	def handle_RootA(RootA,  PA_RootA, Superset_Values, X, Y, superset_values, x_val, y_val):
 		"""
-        Compute the Q[RootA] through mSBD adjustment.
+		Compute the Q[RootA] through mSBD adjustment.
 
-        Parameters:
-        RootA : list of variables corresponding to RootA -- RootA is a set of variables s.t. Q[RootA] is mSBD-expressible. 
-        Superset_Values : list of all values in the superset of variables.
-        superset_values : Series containing the values of the superset of variables.
-        x_val : list of values corresponding to X.
-        y_val : list of values corresponding to Y.
+		Parameters:
+		RootA : list of variables corresponding to RootA -- RootA is a set of variables s.t. Q[RootA] is mSBD-expressible. 
+		Superset_Values : list of all values in the superset of variables.
+		superset_values : Series containing the values of the superset of variables.
+		x_val : list of values corresponding to X.
+		y_val : list of values corresponding to Y.
 
-        Returns:
-        Q value for the given RootA.
-        """
-        
-        # Find the parents of RootA
+		Returns:
+		Q value for the given RootA.
+		"""
+		
+		# Find the parents of RootA
 		if PA_RootA == None:
 			PA_RootA = graph.find_parents(G, RootA)
 
@@ -95,25 +98,25 @@ def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold
 		pa_roota = get_values(variables = PA_RootA, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
 
 		# Compute the Q value for RootA
-		Q_roota, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA, pa_roota, roota, obs_data, alpha_CI, variance_threshold, estimators)
+		Q_roota, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA, pa_roota, roota, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
 		return Q_roota
 
 	def handle_Next_RootA(RootA, PA_RootA, Next_RootA, Superset_Values, X, Y, superset_values, x_val, y_val):
 		"""
-        Compute the Q value for a subset of variables (Next_RootA) from Q[RootA].
+		Compute the Q value for a subset of variables (Next_RootA) from Q[RootA].
 
-        Parameters:
-        RootA : list of variables corresponding to RootA
-        Next_RootA : list of variables corresponding to Next_RootA (subset of RootA)
-        Superset_Values : list of all values in the superset of variables.
-        superset_values : Series containing the values of the superset of variables.
-        x_val : list of values corresponding to X.
-        y_val : list of values corresponding to Y.
+		Parameters:
+		RootA : list of variables corresponding to RootA
+		Next_RootA : list of variables corresponding to Next_RootA (subset of RootA)
+		Superset_Values : list of all values in the superset of variables.
+		superset_values : Series containing the values of the superset of variables.
+		x_val : list of values corresponding to X.
+		y_val : list of values corresponding to Y.
 
-        Returns:
-        Q value for the given Next_RootA.
-        """
-        # Find the parents of RootA
+		Returns:
+		Q value for the given Next_RootA.
+		"""
+		# Find the parents of RootA
 		if PA_RootA == None:
 			PA_RootA = graph.find_parents(G, RootA)
 		
@@ -127,11 +130,14 @@ def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold
 		roota = get_values(variables = RootA, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
 		pa_roota = get_values(variables = PA_RootA, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
 
+		Q_roota_next = {}
+
 		# Check if the SAC criterion is satisfied for RootA_minus_Next
 		if mSBD.constructive_SAC_criterion(G, PA_RootA, RootA_minus_Next):
 			roota_minus_next =  [roota[RootA.index(variable)] for variable in RootA_minus_Next]
-			Q_roota_minus_next, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_minus_Next, pa_roota, roota_minus_next, obs_data, alpha_CI, variance_threshold, estimators) 
-			Q_roota_next = min((Q_roota / Q_roota_minus_next), 1)
+			Q_roota_minus_next, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_minus_Next, pa_roota, roota_minus_next, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting) 
+			for estimator in list_estimators:
+				Q_roota_next[estimator] = min((Q_roota[estimator] / Q_roota_minus_next[estimator]), 1)
 			
 		# Handle the case where SAC criterion is not satisfied
 		else:
@@ -140,38 +146,45 @@ def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold
 			RootA_minus_Next = sorted(RootA_minus_Next, key=lambda x: RootA.index(x))
 
 			# Initialize Q_roota_next as 1 
-			Q_roota_next = 1
+			Q_roota_next = {}
+			for estimator in list_estimators:
+				Q_roota_next[estimator] = 1
 
 			# Q[roota_next] = \prod_{Vj_i \in RootA_minus_Next} (Q_roota_leq_i / Q_roota_less_i)
 			for Vj_i in RootA_minus_Next:
 				Vj_i_index = RootA.index(Vj_i)
 				RootA_leq_i = RootA[:(Vj_i_index+1)]
 				roota_leq_i = get_values(variables = RootA_leq_i, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
-				Q_roota_leq_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_leq_i, pa_roota, roota_leq_i, obs_data, alpha_CI, variance_threshold, estimators) 
+				Q_roota_leq_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_leq_i, pa_roota, roota_leq_i, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
 
 				if Vj_i_index == 0:
-					Q_roota_next *= Q_roota_leq_i
+					for estimator in list_estimators:
+						Q_roota_next[estimator] *= Q_roota_leq_i[estimator]
 				else:
 					RootA_less_i = RootA[:(Vj_i_index)]
 					roota_less_i = get_values(variables = RootA_less_i, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
-					Q_roota_less_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_less_i, pa_roota, roota_less_i, obs_data, alpha_CI, variance_threshold, estimators) 
-					Q_roota_next *= min((Q_roota_leq_i / Q_roota_less_i), 1)
-			Q_roota_next = min(Q_roota_next, 1)
+					Q_roota_less_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_less_i, pa_roota, roota_less_i, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+					for estimator in list_estimators:
+						Q_roota_next[estimator] *= Q_roota_leq_i[estimator]
+					Q_roota_next[estimator] *= min((Q_roota_leq_i[estimator] / Q_roota_less_i[estimator]), 1)
+
+			for estimator in list_estimators:
+				Q_roota_next[estimator] = min(Q_roota_next[estimator], 1)
 
 		return Q_roota_next
 
 	def compute_QSi_from_QSprev(Q_S_prev, Si, S_prev):
 		"""
-        Computes Q[Si](si) using Q[S_prev](s_prev), where Si is an arbitrary subset of S_prev.
+		Computes Q[Si](si) using Q[S_prev](s_prev), where Si is an arbitrary subset of S_prev.
 
-        Parameters:
-        Q_S_prev : dictionary of Q values for S_prev.
-        Si : list of variables in the current subset.
-        S_prev : list of variables in the previous subset.
+		Parameters:
+		Q_S_prev : dictionary of Q values for S_prev.
+		Si : list of variables in the current subset.
+		S_prev : list of variables in the previous subset.
 
-        Returns:
-        A dictionary of Q values for Si.
-        """
+		Returns:
+		A dictionary of Q values for Si.
+		"""
 
 		def get_variable_indices(Si, S_prev):
 			"""
@@ -232,21 +245,27 @@ def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold
 	D_minus_Y = list(set(D) - set(Y))
 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
-	ATE = dict()
+	ATE = {}
+	for estimator in list_estimators:
+		ATE[estimator] = {}
 
 	for _, x_val in X_values_combinations.iterrows():
 		x_val_tuple = tuple(x_val)
-		ATE[x_val_tuple] = 0
+		for estimator in list_estimators:
+			ATE[estimator][x_val_tuple] = 0
 
 		for d_minus_y in obs_data[D_minus_Y].drop_duplicates().itertuples(index=False) if len(D_minus_Y) > 0 else [pd.Series()]:
-			Q_D_val = 1 
+			Q_D_val = {} 
+			for estimator in list_estimators:
+				Q_D_val[estimator] = 1
 			
 			for adj_dict_component in adj_dict_components.values():
 				# Case 1. len(adj_dict_component) == 1 (That is, Di = adj_dict_component[0])
 				if len(adj_dict_component) == 1:
 					Dj = adj_dict_component[0]
 					Q_Dj_val = handle_RootA(RootA = Dj, PA_RootA = None, Superset_Values = D_minus_Y, X = X, Y = Y, superset_values = d_minus_y, x_val = x_val, y_val = y_val)
-					Q_D_val *= Q_Dj_val
+					for estimator in list_estimators:
+						Q_D_val[estimator] *= Q_Dj_val[estimator]
 
 				# Case 2. len(adj_dict_component) == 2 (That is, Di = adj_dict_component[1])
 				elif len(adj_dict_component) == 2: 
@@ -255,7 +274,8 @@ def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold
 					Dj = adj_dict_component[1]
 
 					Q_Dj_val = handle_Next_RootA(RootA = S0, PA_RootA = PA_S0, Next_RootA = Dj, Superset_Values = D_minus_Y, X = X, Y = Y, superset_values = d_minus_y, x_val = x_val, y_val = y_val)
-					Q_D_val *= Q_Dj_val
+					for estimator in list_estimators:
+						Q_D_val[estimator] *= Q_Dj_val[estimator]
 
 
 				# Case 3. len(adj_dict_component) > 2 (That is, Di = adj_dict_component[1])
@@ -270,24 +290,33 @@ def estimate_general(G, X, Y, y_val, obs_data, alpha_CI=0.05, variance_threshold
 					domain_S0 = [tuple(v) for v in obs_data[S0].drop_duplicates().itertuples(index=False)]
 					
 					Q_S0 = {}
+					for estimator in list_estimators:
+						Q_S0[estimator] = {}
+
 					for s0 in domain_S0:
 						Q_s0_val = handle_RootA(RootA = S0, PA_RootA = PA_S0, Superset_Values = S0, X = X, Y = Y, superset_values = pd.Series(s0, S0), x_val = x_val, y_val = y_val)
-						Q_S0[s0] = Q_s0_val
+						for estimator in list_estimators:
+							Q_S0[estimator][s0] = Q_s0_val[estimator]
 
 					Q_Sprev = Q_S0
 					S_prev = S0
 
 					while adj_dict_component_copy:
 						Si = adj_dict_component_copy.pop(0)
-						Q_Si = compute_QSi_from_QSprev(Q_Sprev, Si, S_prev)
+						Q_Si = {}
+						for estimator in list_estimators:
+							Q_Si[estimator] = compute_QSi_from_QSprev(Q_Sprev[estimator], Si, S_prev)
 
 						S_prev = Si 
 						Q_Sprev = Q_Si
 
-					Q_Dj_val = Q_Si[tuple(get_values(Si, D_minus_Y, X, Y, d_minus_y, x_val, y_val))]
-					Q_D_val *= Q_Dj_val
+					Q_Dj_val = {}
+					for estimator in list_estimators:
+						Q_Dj_val[estimator] = Q_Si[estimator][tuple(get_values(Si, D_minus_Y, X, Y, d_minus_y, x_val, y_val))]
+						Q_D_val[estimator] *= Q_Dj_val[estimator]
 
-			ATE[x_val_tuple] += Q_D_val
+			for estimator in list_estimators:
+				ATE[estimator][x_val_tuple] += Q_D_val[estimator]
 
 	return ATE
 
@@ -306,14 +335,6 @@ def estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold 
 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
 	ATE = dict()
-
-	# unique_rows = obs_data[V_XY].drop_duplicates()	
-	# unique_row_proportions = obs_data[V_XY].value_counts(normalize=True).reset_index(name='proportion')
-	# unique_rows_with_proportions = pd.merge(unique_rows, unique_row_proportions, on=V_XY, how='left')
-
-	# if len(unique_rows) > MC_integration_threshold:
-	# 	unique_rows = unique_rows_with_proportions.sample(n=MC_integration_threshold, random_state = seednum)
-	# 	# unique_rows = unique_rows_with_proportions.sample(n=MC_integration_threshold, replace = True, weights = 'proportion', random_state = seednum)
 
 	for _, x_val in X_values_combinations.iterrows():
 		ATE[tuple(x_val)] = 0
@@ -487,6 +508,24 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_thre
 			ATE[tuple(x_val)] += Q_D_val
 	return ATE
 
+def compute_performance(truth, ATE):
+	performance = {}
+	rank_correlation_pvalue = {}
+
+	for estimator in list(ATE.keys()):
+		performance[estimator] = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE[estimator].values()))))
+		rank_correlation_pvalue[estimator] = list( spearmanr(list(truth.values()), list(ATE[estimator].values())) )
+	
+	performance_table_data = [[estimator] + [performance[estimator]] for estimator in performance]
+	performance_table_header = ["Estimator", "Error"]
+	performance_table = tabulate(performance_table_data, tablefmt='grid', floatfmt=".3f", headers = performance_table_header)
+
+	rank_correlation_table_data = [[estimator] + [value for value in rank_correlation_pvalue[estimator]] for estimator in rank_correlation_pvalue]
+	rank_correlation_table_header = ["Estimator", "Rank Correlation", "P-value"]
+	rank_correlation_table = tabulate(rank_correlation_table_data, tablefmt='grid', floatfmt=".3f", headers = rank_correlation_table_header)
+
+	return performance_table, rank_correlation_table
+
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
 	seednum = int(time.time())
@@ -501,9 +540,9 @@ if __name__ == "__main__":
 		condition_BD=False, 
 		condition_mSBD=False, 
 		condition_FD=False, 
-		condition_Tian=True, 
-		condition_gTian=True,
-		condition_product = True, 
+		condition_Tian=False, 
+		condition_gTian=False,
+		condition_product = False, 
 		discrete = True, 
 		seednum = seednum 
 	)
@@ -527,38 +566,50 @@ if __name__ == "__main__":
 
 	truth = statmodules.ground_truth(scm, obs_data, X, Y)
 	y_val = np.ones(len(Y)).astype(int)
-	if satisfied_Tian:
-		ATE_OM = estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
-		ATE_DML = estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
-	elif satisfied_product:
-		ATE_OM = estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
-		ATE_DML = estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
-	elif satisfied_gTian:
-		ATE_OM = estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
-		ATE_DML = estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
-	else:
-		ATE_OM = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
-		ATE_DML = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
+	ATE_gen = estimate_general(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 100, EB_boosting = 20)
+	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE_gen)
 
-		# ATE_OM_gen = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
+	print("Performance")
+	print(performance_table)
+
+	print("Rank Correlation")
+	print(rank_correlation_table)
+
+	ATE_gen = estimate_general(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 100, EB_boosting = 20)
+
+	ATE_gen_tmp = estimate_general(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 10, EB_boosting = 200)
+
+	# if satisfied_Tian:
+	# 	ATE_OM = estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
+	# 	ATE_DML = estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
+	# elif satisfied_product:
+	# 	ATE_OM = estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
+	# 	ATE_DML = estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
+	# elif satisfied_gTian:
+	# 	ATE_OM = estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
+	# 	ATE_DML = estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
+	# else:
+	# 	ATE_OM = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
+	# 	ATE_DML = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
+
+		# ATE_gen = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
 		# ATE_DML_gen = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
 
+	# performance_OM = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_OM.values()))))
+	# performance_DML = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_DML.values()))))
+	# print("Performance (OM):", performance_OM)
+	# print("Performance (DML):", performance_DML)
 
-	performance_OM = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_OM.values()))))
-	performance_DML = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_DML.values()))))
-	print("Performance (OM):", performance_OM)
-	print("Performance (DML):", performance_DML)
+	# # performance_OM_gen = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_OM_gen.values()))))
+	# # performance_DML_gen = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_DML_gen.values()))))
+	# # print("Performance (OM_gen):", performance_OM_gen)
+	# # print("Performance (DML_gen):", performance_DML_gen)
 
-	# performance_OM_gen = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_OM_gen.values()))))
-	# performance_DML_gen = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE_DML_gen.values()))))
-	# print("Performance (OM_gen):", performance_OM_gen)
-	# print("Performance (DML_gen):", performance_DML_gen)
+	# rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE_OM.values()))
+	# print(f"Spearman Rank correlation coefficient (OM): {rank_correlation}")
+	# print(f"P-value (OM): {rank_p_values}")
 
-	rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE_OM.values()))
-	print(f"Spearman Rank correlation coefficient (OM): {rank_correlation}")
-	print(f"P-value (OM): {rank_p_values}")
-
-	rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE_DML.values()))
-	print(f"Spearman Rank correlation coefficient (DML): {rank_correlation}")
-	print(f"P-value: {rank_p_values}")
+	# rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE_DML.values()))
+	# print(f"Spearman Rank correlation coefficient (DML): {rank_correlation}")
+	# print(f"P-value: {rank_p_values}")
 
