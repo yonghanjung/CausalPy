@@ -19,7 +19,6 @@ from scipy.stats import norm
 
 from joblib import Parallel, delayed
 
-
 def ground_truth(scm, obs_data, X, Y):
 	def randomized_equation(**args):
 		num_samples = args.pop('num_sample')
@@ -50,13 +49,26 @@ def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_fea
 	mu_xZ = obs[col_feature_1]
 	mu_XZ = obs[col_feature_2]
 
+	# Determine the number of batches
+	n = len(obs)
+	if B is None:
+		B = int(np.ceil(n / batch_size))
+	
+	# Shuffle the dataset
+	obs_shuffled = obs.sample(frac=1, random_state=123).reset_index(drop=True)
+
 	for i in range(B):
-		obs_batch = obs.sample(n=batch_size, replace = True)
+		start_idx = i * batch_size
+		end_idx = min((i + 1) * batch_size, n)
+		obs_batch = obs_shuffled.iloc[start_idx:end_idx]
+		
 		W_opt_batch = entropy_balancing(obs_batch, x_val, X, Z, col_feature_1, col_feature_2)
-		if i == 0:
+
+		if not approximators:  # First iteration
 			residual = W_opt_batch
 		else:
 			residual = W_opt_batch - sum(mu_i.predict(xgb.DMatrix(obs_batch[col_feature])) for mu_i in approximators)
+		
 		obs_batch.loc[:, 'residual'] = residual
 		mu_i = learn_mu(obs_batch, col_feature, col_label, params=None)
 		approximators.append(mu_i)

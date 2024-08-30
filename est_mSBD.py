@@ -451,9 +451,8 @@ if __name__ == "__main__":
 
 	truth = statmodules.ground_truth(scm, obs_data, X, Y)
 
-	### EB_samplesize = 50 with EB_boosting = 50 is TERRIBLE!!! (IPW         | 1287.726 ). It takes 234
 	start_time = time.process_time()
-	EB_samplesize = 500 
+	EB_samplesize = 200
 	EB_boosting = 5
 	ATE, VAR, lower_CI, upper_CI = estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting, seednum = 123, only_OM = False)
 	end_time = time.process_time()

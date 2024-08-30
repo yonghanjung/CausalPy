@@ -51,7 +51,6 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 
 	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
 
-
 	def get_values(variables, Superset_Values, X, Y, superset_values, x_val, y_val):
 		"""
 		Get the realized values for the specified variables.
@@ -320,8 +319,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 
 	return ATE
 
-
-def estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = "DML", seednum = 123, MC_integration_threshold = 10):
+def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200, EB_boosting = 5):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -334,10 +332,16 @@ def estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold 
 	V_Y = sorted( list( set(topo_V) - set(Y)), key=lambda x: topo_V.index(x) )	
 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
-	ATE = dict()
+
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+	
+	ATE = {}
+	for estimator in list_estimators:
+		ATE[estimator] = {}
 
 	for _, x_val in X_values_combinations.iterrows():
-		ATE[tuple(x_val)] = 0
+		for estimator in list_estimators:
+			ATE[estimator][tuple(x_val)] = 0
 		for v_minus_XY in obs_data[V_XY].drop_duplicates().itertuples(index=False):
 			# Compute Q[V\SX](v)
 			PA_V_SX = graph.find_parents(G, V_SX)
@@ -353,7 +357,7 @@ def estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold 
 				for variable in PA_V_SX
 			]
 			# Compute Q[V\SX] 
-			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = estimators)
+			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
 
 			# Compute Q[SX\X] 
 			PA_SX_X = graph.find_parents(G, SX_X)
@@ -369,13 +373,14 @@ def estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold 
 				for variable in PA_SX_X
 			]
 			# Compute Q[SX_X] 
-			Q_SX_X_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_SX_X, SX_X, pa_sx_x, sx_x, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = estimators)
+			Q_SX_X_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_SX_X, SX_X, pa_sx_x, sx_x, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
 
-			ATE[tuple(x_val)] += (Q_V_SX_val * Q_SX_X_val)
+			for estimator in list_estimators:
+				ATE[estimator][tuple(x_val)] += (Q_V_SX_val[estimator] * Q_SX_X_val[estimator])
 
 	return ATE
 
-def estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = "DML", seednum = 123):
+def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200, EB_boosting = 5):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -388,7 +393,11 @@ def estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold
 	V_Y = sorted( list( set(topo_V) - set(Y)), key=lambda x: topo_V.index(x) )	
 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
-	ATE = dict()
+	
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+	ATE = {}
+	for estimator in list_estimators:
+		ATE[estimator] = {}
 
 	idx = 0 
 	X_copy = X[:]
@@ -460,7 +469,7 @@ def estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold
 
 	return ATE
 
-def estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 100, estimators = "DML", seednum = 123):
+def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200, EB_boosting = 5):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -478,7 +487,11 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_thre
 	D_minus_Y = list(set(D) - set(Y))
 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
-	ATE = dict()
+	
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+	ATE = {}
+	for estimator in list_estimators:
+		ATE[estimator] = {}
 
 	for _, x_val in X_values_combinations.iterrows():
 		ATE[tuple(x_val)] = 0
@@ -508,23 +521,6 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_thre
 			ATE[tuple(x_val)] += Q_D_val
 	return ATE
 
-def compute_performance(truth, ATE):
-	performance = {}
-	rank_correlation_pvalue = {}
-
-	for estimator in list(ATE.keys()):
-		performance[estimator] = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE[estimator].values()))))
-		rank_correlation_pvalue[estimator] = list( spearmanr(list(truth.values()), list(ATE[estimator].values())) )
-	
-	performance_table_data = [[estimator] + [performance[estimator]] for estimator in performance]
-	performance_table_header = ["Estimator", "Error"]
-	performance_table = tabulate(performance_table_data, tablefmt='grid', floatfmt=".3f", headers = performance_table_header)
-
-	rank_correlation_table_data = [[estimator] + [value for value in rank_correlation_pvalue[estimator]] for estimator in rank_correlation_pvalue]
-	rank_correlation_table_header = ["Estimator", "Rank Correlation", "P-value"]
-	rank_correlation_table = tabulate(rank_correlation_table_data, tablefmt='grid', floatfmt=".3f", headers = rank_correlation_table_header)
-
-	return performance_table, rank_correlation_table
 
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
@@ -540,9 +536,9 @@ if __name__ == "__main__":
 		condition_BD=False, 
 		condition_mSBD=False, 
 		condition_FD=False, 
-		condition_Tian=False, 
-		condition_gTian=False,
-		condition_product = False, 
+		condition_Tian=True, 
+		condition_gTian=True,
+		condition_product = True, 
 		discrete = True, 
 		seednum = seednum 
 	)
@@ -566,8 +562,17 @@ if __name__ == "__main__":
 
 	truth = statmodules.ground_truth(scm, obs_data, X, Y)
 	y_val = np.ones(len(Y)).astype(int)
-	ATE_gen = estimate_general(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 100, EB_boosting = 20)
-	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE_gen)
+
+	if satisfied_Tian:
+		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False)
+	elif satisfied_product:
+		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False)
+	elif satisfied_gTian:
+		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False)
+	else:
+		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
+
+	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
 
 	print("Performance")
 	print(performance_table)
@@ -575,22 +580,7 @@ if __name__ == "__main__":
 	print("Rank Correlation")
 	print(rank_correlation_table)
 
-	ATE_gen = estimate_general(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 100, EB_boosting = 20)
-
-	ATE_gen_tmp = estimate_general(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 10, EB_boosting = 200)
-
-	# if satisfied_Tian:
-	# 	ATE_OM = estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
-	# 	ATE_DML = estimate_Tian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
-	# elif satisfied_product:
-	# 	ATE_OM = estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
-	# 	ATE_DML = estimate_product_QD(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
-	# elif satisfied_gTian:
-	# 	ATE_OM = estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
-	# 	ATE_DML = estimate_gTian(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
-	# else:
-	# 	ATE_OM = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "OM")
-	# 	ATE_DML = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
+	
 
 		# ATE_gen = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
 		# ATE_DML_gen = estimate_general(G, X, Y, y_val, obs_data, alpha_CI = 0.05, variance_threshold = 5, estimators = "DML")
