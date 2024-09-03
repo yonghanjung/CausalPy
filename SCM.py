@@ -186,58 +186,6 @@ class StructuralCausalModel:
 				else:
 					continue
 
-
-	# def generate_random_scm(self, num_observed, num_unobserved, num_treatments, num_outcomes, seed = None):
-	# 	"""
-	# 	Generate a random Structural Causal Model (SCM).
-
-	# 	Parameters:
-	# 	num_unobserved (int): Number of unobserved variables.
-	# 	num_observed (int): Number of observed variables.
-	# 	num_treatments (int): Number of treatment variables.
-	# 	num_outcomes (int): Number of outcome variables.
-	# 	"""
-	# 	if seed is not None: 
-	# 		random.seed(int(seed))
-	# 		np.random.seed(seed)
-
-	# 	# Initialize observed variable names based on their types (treatment, outcome, or other)
-	# 	observed_vars = []
-	# 	for i in range(num_treatments):
-	# 		var_type = 'X'
-	# 		observed_vars.append(f'{var_type}{i+1}')
-
-	# 	for i in range(num_outcomes):
-	# 		var_type = 'Y'
-	# 		observed_vars.append(f'{var_type}{i+1}')
-
-	# 	for i in range(num_observed - num_treatments - num_outcomes ):
-	# 		var_type = 'V'
-	# 		observed_vars.append(f'{var_type}{i+1}')
-
-	# 	# Attempt to create an acyclic graph
-	# 	while True:
-	# 		self.graph.clear()
-	# 		self.equations.clear()
-	# 		self.noise_distributions.clear()
-
-	# 		# Add unobserved variables
-	# 		for i in range(num_unobserved):
-	# 			self.add_unobserved_variable(f'U{i+1}', stats.norm(0, 1))
-
-	# 		# Randomly connect observed variables ensuring no isolated variables
-	# 		if not self.connect_observed_variables(observed_vars, num_observed):
-	# 			continue  # Retry if graph is not valid
-
-	# 		# Assign two observed variables to each unobserved variable
-	# 		if not self.assign_unobserved_parents(observed_vars):
-	# 			continue  # Retry if graph is not valid
-
-	# 		# Check if the resultant graph is acyclic
-	# 		if nx.is_directed_acyclic_graph(self.graph):
-	# 			break  # Valid graph generated
-
-
 	def generate_random_graph(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.25, seednum = 123):
 		'''
 		Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.

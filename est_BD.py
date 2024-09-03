@@ -24,24 +24,37 @@ import statmodules
 pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 
-def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100):
+def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = 200, EB_boosting = 10, seednum = 123, only_OM = False):
+	np.random.seed(int(seednum))
+	random.seed(int(seednum))
+
+	topo_V = graph.find_topological_order(G)
+	Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
+
 	z_score = norm.ppf(1 - alpha_CI / 2)
-	variance_threshold = 100
+
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
 
 	ATE = {}
 	VAR = {}
-	truth = {}
+	lower_CI = {}
+	upper_CI = {}
 
-	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
+	for estimator in list_estimators:
+		ATE[estimator] = {}
+		VAR[estimator] = {}
+		lower_CI[estimator] = {}
+		upper_CI[estimator] = {}
 
-	Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
 
 	# Compute causal effect estimations
 	if not Z:
-		for _, x_val in X_values_combinations.iterrows():
-			mask = (obs_data[X] == x_val.values).all(axis=1)
-			ATE[tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
-			VAR[tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
+		for estimator in list_estimators:
+			for _, x_val in X_values_combinations.iterrows():
+				mask = (obs_data[X] == x_val.values).all(axis=1)
+				ATE[estimator][tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
+				VAR[estimator][tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
 	else:
 		L = 2
 		kf = KFold(n_splits=L, shuffle=True)
@@ -60,37 +73,55 @@ def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100):
 				mu_XZ = nuisance_mu.predict(xgb.DMatrix(obs_test[col_feature]))
 				obs_test.loc[:, 'mu_xZ'] = mu_xZ
 				obs_test.loc[:, 'mu_XZ'] = mu_XZ
-				if len(obs_test) < 1000:
-					pi_XZ = statmodules.entropy_balancing(obs_test, x_val.values, X, Z)
-				else: 
-					pi_XZ = statmodules.entropy_balancing_booster(obs_test, x_val.values, Z, X, B=5, batch_size=100)
+				if only_OM: 
+					OM_est = np.mean(mu_xZ) 
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_est
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['mu_xZ'] - OM_est) ** 2 )
 
-				Yvec = (obs_test[Y].values.flatten())
-				OM_est = np.mean(mu_xZ) 
-				PW_est = np.mean(pi_XZ * Yvec)
-				AIPW_val = OM_est + PW_est - np.mean( pi_XZ *mu_XZ )
-				variance_val = np.mean( (mu_xZ + pi_XZ * ( Yvec - mu_XZ) - AIPW_val) ** 2 )
-
-				if variance_val >= variance_threshold:
-					ATE[tuple(x_val)] = ATE.get(tuple(x_val), 0) + OM_est
-					VAR[tuple(x_val)] = VAR.get(tuple(x_val), 0) + np.mean( (mu_XZ - OM_est) ** 2 )
 				else:
-					ATE[tuple(x_val)] = ATE.get(tuple(x_val), 0) + AIPW_val
-					VAR[tuple(x_val)] = VAR.get(tuple(x_val), 0) + variance_val
+					if len(obs_test) < EB_samplesize:
+						pi_XZ = statmodules.entropy_balancing(obs = obs_test, 
+																x_val = x_val.values, 
+																X = X, 
+																Z = Z, 
+																col_feature_1 = 'mu_xZ', 
+																col_feature_2 = 'mu_XZ')
+					else: 
+						pi_XZ = statmodules.entropy_balancing_booster(obs = obs_test, 
+																		x_val = x_val.values, 
+																		Z = Z, 
+																		X = X, 
+																		col_feature_1 = 'mu_xZ', 
+																		col_feature_2 = 'mu_XZ',
+																		B=EB_boosting, 
+																		batch_size=EB_samplesize)
+
+					OM_est = np.mean(mu_xZ) 
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_est
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['mu_xZ'] - OM_est) ** 2 )
+
+					Yvec = (obs_test[Y].values.flatten())
+					PW_est = np.mean(pi_XZ * Yvec)
+					ATE["IPW"][tuple(x_val)] = ATE["IPW"].get(tuple(x_val), 0) + PW_est
+					VAR["IPW"][tuple(x_val)] = VAR["IPW"].get(tuple(x_val), 0) + np.mean( (pi_XZ * Yvec - PW_est) ** 2 )
+
+					AIPW_est = OM_est + PW_est - np.mean( pi_XZ *mu_XZ )
+					AIPW_pseudo_outcome = mu_xZ + pi_XZ * (Yvec - mu_XZ)
+					ATE["DML"][tuple(x_val)] = ATE["DML"].get(tuple(x_val), 0) + AIPW_est
+					VAR["DML"][tuple(x_val)] = VAR["DML"].get(tuple(x_val), 0) + np.mean( (AIPW_pseudo_outcome - AIPW_est) ** 2 )
 
 		for _, x_val in X_values_combinations.iterrows():
-			ATE[tuple(x_val)] /= L
-			VAR[tuple(x_val)] /= L
+			for estimator in list_estimators:
+				ATE[estimator][tuple(x_val)] /= L
+				VAR[estimator][tuple(x_val)] /= L
 
-
-	lower_CI = {}
-	upper_CI = {}
 	for _, x_val in X_values_combinations.iterrows():
-		mean_ATE_x = ATE[tuple(x_val)]
-		lower_x = (mean_ATE_x - z_score * VAR[tuple(x_val)] * (len(obs_data) ** (-1/2)) )
-		upper_x = (mean_ATE_x + z_score * VAR[tuple(x_val)] * (len(obs_data) ** (-1/2)) )
-		lower_CI[tuple(x_val)] = lower_x
-		upper_CI[tuple(x_val)] = upper_x
+		for estimator in list_estimators:
+			mean_ATE_x = ATE[estimator][tuple(x_val)]
+			lower_x = (mean_ATE_x - z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			upper_x = (mean_ATE_x + z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			lower_CI[estimator][tuple(x_val)] = lower_x
+			upper_CI[estimator][tuple(x_val)] = upper_x
 
 	return ATE, VAR, lower_CI, upper_CI
 
@@ -103,7 +134,7 @@ if __name__ == "__main__":
 	random.seed(seednum)
 
 	scm, X, Y = random_generator.Random_SCM_Generator(
-		num_observables=6, num_unobservables=1, num_treatments=1, num_outcomes=1,
+		num_observables=6, num_unobservables=1, num_treatments=2, num_outcomes=1,
 		condition_ID=True, 
 		condition_BD=True, 
 		condition_mSBD=True, 
@@ -114,11 +145,6 @@ if __name__ == "__main__":
 		discrete = False, 
 		seednum = seednum 
 	)
-
-	G = scm.graph
-	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
-	topo_V = graph.find_topological_order(G)
-	obs_data = scm.generate_samples(10000)[topo_V]
 
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
@@ -136,16 +162,18 @@ if __name__ == "__main__":
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 
 	truth = statmodules.ground_truth(scm, obs_data, X, Y)
-	ATE, VAR, lower_CI, upper_CI = estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, variance_threshold = 100)
 
+	EB_samplesize = 200
+	EB_boosting = 5 
+	ATE, VAR, lower_CI, upper_CI = estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting, seednum = 123, only_OM = False)
 
-	# Evaluate performance
-	performance = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE.values()))))
-	print("Performance:", performance)
+	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
 
-	rank_correlation, rank_p_values = spearmanr(list(truth.values()), list(ATE.values()))
-	print(f"Spearman Rank correlation coefficient: {rank_correlation}")
-	print(f"P-value: {rank_p_values}")
+	print("Performance")
+	print(performance_table)
+
+	print("Rank Correlation")
+	print(rank_correlation_table)
 
 	
 

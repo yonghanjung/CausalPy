@@ -20,14 +20,16 @@ import mSBD
 import tian
 import statmodules
 
+import est_BD
 import est_mSBD
+import example_SCM
 
 # Turn off alarms
 pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_samplesize = 100, EB_boosting = 5):
+def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_samplesize = 200, EB_boosting = 5):
 	"""
 	Estimate the Average Treatment Effect (ATE) using the general framework.
 
@@ -380,7 +382,6 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200
 
 	return ATE
 
-######## 240830 Change with ATE[estimator] HERE
 def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200, EB_boosting = 5):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
@@ -538,6 +539,30 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize
 				ATE[estimator][tuple(x_val)] += Q_D_val[estimator]
 	return ATE
 
+def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_samplesize = 200, EB_boosting = 5):
+	# Check various criteria
+	satisfied_BD = adjustment.check_admissibility(G, X, Y)
+	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
+	satisfied_FD = frontdoor.constructive_FD(G, X, Y)
+	satisfied_Tian = tian.check_Tian_criterion(G, X)
+	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
+	satisfied_product = tian.check_product_criterion(G, X, Y)
+
+	if satisfied_BD:
+		ATE, _, _, _ = est_BD.estimate_BD(G, X, Y, obs_data, only_OM = False)
+		return ATE 
+
+	elif satisfied_mSBD:
+		if len(Y) == 1:
+			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM = False)
+		else:
+			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM = False)
+		return ATE 
+
+	else: 
+		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
+		return ATE 
+
 
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
@@ -548,18 +573,24 @@ if __name__ == "__main__":
 	np.random.seed(seednum)
 	random.seed(seednum)
 
-	scm, X, Y = random_generator.Random_SCM_Generator(
-		num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
-		condition_ID=True, 
-		condition_BD=False, 
-		condition_mSBD=False, 
-		condition_FD=False, 
-		condition_Tian=False, 
-		condition_gTian=True,
-		condition_product = False, 
-		discrete = True, 
-		seednum = seednum 
-	)
+	# scm, X, Y = random_generator.Random_SCM_Generator(
+	# 	num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
+	# 	condition_ID=True, 
+	# 	condition_BD=False, 
+	# 	condition_mSBD=False, 
+	# 	condition_FD=False, 
+	# 	condition_Tian=True, 
+	# 	condition_gTian=True,
+	# 	condition_product = True, 
+	# 	discrete = True, 
+	# 	seednum = seednum 
+	# )
+
+	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
+	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
+	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
+	scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
 
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
@@ -575,29 +606,40 @@ if __name__ == "__main__":
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 	satisfied_product = tian.check_product_criterion(G, X, Y)
 
-	print(identify.causal_identification(G, X, Y, True))
-	# identify.draw_AC_tree(G,X,Y)
+	print(identify.causal_identification(G, X, Y, False))
+	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
 
-	truth = statmodules.ground_truth(scm, obs_data, X, Y)
 	y_val = np.ones(len(Y)).astype(int)
+	truth = statmodules.ground_truth(scm, obs_data, X, Y, y_val)
 
-	if satisfied_Tian:
-		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False)
-	elif satisfied_product:
-		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False)
-	elif satisfied_gTian:
-		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False)
-	else:
-		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
+	ATE = estimate_case_by_case(G, X, Y, y_val, obs_data)
+
+	# if satisfied_BD:
+	# 	ATE, _, _, _ = est_BD.estimate_BD(G, X, Y, obs_data, only_OM = False)
+	# if satisfied_mSBD:
+	# 	if len(Y) == 1:
+	# 		ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM = False)
+	# 	else:
+	# 		ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM = False)
+	# elif satisfied_Tian:
+	# 	ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False)
+	# elif satisfied_product:
+	# 	ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False)
+	# elif satisfied_gTian:
+	# 	ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False)
+	# else:
+	# 	ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
 
 	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
-
-	# ATE_gen = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
-	# performance_table_gen, rank_correlation_table_gen = statmodules.compute_performance(truth, ATE_gen)
-	# print(performance_table_gen)
-
 	print("Performance")
 	print(performance_table)
-
 	print("Rank Correlation")
 	print(rank_correlation_table)
+
+	# # ATE_gen = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
+	# # performance_table_gen, rank_correlation_table_gen = statmodules.compute_performance(truth, ATE_gen)
+	# # print(performance_table_gen)
+
+	
+
+	

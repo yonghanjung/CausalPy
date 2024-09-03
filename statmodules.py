@@ -19,7 +19,7 @@ from scipy.stats import norm
 
 from joblib import Parallel, delayed
 
-def ground_truth(scm, obs_data, X, Y):
+def ground_truth(scm, obs_data, X, Y, yval = None):
 	def randomized_equation(**args):
 		num_samples = args.pop('num_sample')
 		return np.random.binomial(1, 0.5, num_samples)
@@ -34,9 +34,18 @@ def ground_truth(scm, obs_data, X, Y):
 	intv_data = scm.generate_samples(1000000)[topo_V]
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
 
-	for _, x_val in X_values_combinations.iterrows():
-		mask = (intv_data[X] == x_val.values).all(axis=1)
-		truth[tuple(x_val)] = intv_data.loc[mask, Y].mean().iloc[0]
+	if len(Y) == 1:
+		for _, x_val in X_values_combinations.iterrows():
+			mask = (intv_data[X] == x_val.values).all(axis=1)
+			truth[tuple(x_val)] = intv_data.loc[mask, Y].mean().iloc[0]
+
+	else:
+		IyY = ((intv_data[Y] == tuple(yval))*1).prod(axis=1)
+		intv_data_y = intv_data[:]
+		intv_data_y.loc[:, 'IyY'] = np.asarray(IyY)
+		for _, x_val in X_values_combinations.iterrows():
+			mask = (intv_data_y[X] == x_val.values).all(axis=1)
+			truth[tuple(x_val)] = intv_data_y.loc[mask, 'IyY'].mean()
 	return truth 
 
 
@@ -51,9 +60,8 @@ def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_fea
 
 	# Determine the number of batches
 	n = len(obs)
-	if B is None:
-		B = int(np.ceil(n / batch_size))
-	
+	B = min(int(np.ceil(n / batch_size)), B)
+		
 	# Shuffle the dataset
 	obs_shuffled = obs.sample(frac=1, random_state=123).reset_index(drop=True)
 
