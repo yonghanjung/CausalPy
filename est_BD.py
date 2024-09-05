@@ -129,7 +129,7 @@ def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = 200, EB_boos
 
 	return ATE, VAR, lower_CI, upper_CI
 
-def estimate_BD_osqp(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = 200, EB_boosting = 10, seednum = 123, only_OM = False):
+def estimate_BD_osqp(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -184,22 +184,12 @@ def estimate_BD_osqp(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = 200, EB
 					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['mu_xZ'] - OM_est) ** 2 )
 
 				else:
-					if len(obs_test) < EB_samplesize:
-						pi_XZ = statmodules.entropy_balancing_osqp(obs = obs_test, 
-																x_val = x_val.values, 
-																X = X, 
-																Z = Z, 
-																col_feature_1 = 'mu_xZ', 
-																col_feature_2 = 'mu_XZ')
-					else: 
-						pi_XZ = statmodules.entropy_balancing_booster_osqp(obs = obs_test, 
-																		x_val = x_val.values, 
-																		Z = Z, 
-																		X = X, 
-																		col_feature_1 = 'mu_xZ', 
-																		col_feature_2 = 'mu_XZ',
-																		B=EB_boosting, 
-																		batch_size=EB_samplesize)
+					pi_XZ = statmodules.entropy_balancing_osqp(obs = obs_test, 
+															x_val = x_val.values, 
+															X = X, 
+															Z = Z, 
+															col_feature_1 = 'mu_xZ', 
+															col_feature_2 = 'mu_XZ')
 
 					OM_est = np.mean(mu_xZ) 
 					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_est
@@ -286,7 +276,7 @@ if __name__ == "__main__":
 	print(rank_correlation_table)
 
 	start_time = time.process_time()
-	ATE, VAR, lower_CI, upper_CI = estimate_BD_osqp(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = 10000, EB_boosting = 1, seednum = 123, only_OM = False)
+	ATE, VAR, lower_CI, upper_CI = estimate_BD_osqp(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False)
 	end_time = time.process_time()
 	print(f'Time with OSQP: {end_time - start_time}')
 
