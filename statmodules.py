@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
-# from scipy.optimize import minimize
+from scipy.optimize import minimize
 from scipy.stats import norm
 import copy
 from scipy import stats
@@ -17,7 +17,8 @@ import graph
 from scipy.stats import spearmanr
 from scipy.stats import norm
 
-from joblib import Parallel, delayed
+import osqp
+from scipy import sparse
 
 def ground_truth(scm, obs_data, X, Y, yval):
 	def randomized_equation(**args):
@@ -48,7 +49,88 @@ def ground_truth(scm, obs_data, X, Y, yval):
 			mask = (intv_data_y[X] == x_val.values).all(axis=1)
 			truth[tuple(x_val)] = intv_data_y.loc[mask, 'IyY'].mean()
 		return truth 
+
+def entropy_balancing_booster_osqp(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=10, batch_size=100):
+	col_feature = X + Z
+	col_label = ['residual']
+	approximators = []
+	IxX = np.array((obs[X] == x_val).prod(axis=1))
+	mu_xZ = obs[col_feature_1]
+	mu_XZ = obs[col_feature_2]
+
+	# Determine the number of batches
+	n = len(obs)
+	B = min(int(np.ceil(n / batch_size)), B)
+		
+	# Shuffle the dataset
+	obs_shuffled = obs.sample(frac=1, random_state=123).reset_index(drop=True)
+
+	for i in range(B):
+		start_idx = i * batch_size
+		end_idx = min((i + 1) * batch_size, n)
+		obs_batch = obs_shuffled.iloc[start_idx:end_idx]
+		
+		W_opt_batch = entropy_balancing_osqp(obs_batch, x_val, X, Z, col_feature_1, col_feature_2)
+
+		if not approximators:  # First iteration
+			residual = W_opt_batch
+		else:
+			residual = W_opt_batch - sum(mu_i.predict(xgb.DMatrix(obs_batch[col_feature])) for mu_i in approximators)
+		
+		obs_batch.loc[:, 'residual'] = residual
+		mu_i = learn_mu(obs_batch, col_feature, col_label, params=None)
+		approximators.append(mu_i)
 	
+	W_project = sum(mu_i.predict(xgb.DMatrix(obs[col_feature])) for mu_i in approximators)
+	return W_project * IxX
+
+def entropy_balancing_osqp(obs, x_val, X, Z, col_feature_1='mu_xZ', col_feature_2='mu_XZ'):
+    # Get data
+    IxX = np.array((obs[X] == x_val).prod(axis=1))
+    n = len(obs)
+    mu_xZ = obs[col_feature_1].values
+    mu_XZ = obs[col_feature_2].values
+    
+    # Objective function setup (regularized quadratic form)
+    P = sparse.diags([1.0] * n)  # Identity matrix for W^T W (regularization term)
+    q = np.zeros(n)  # Linear term for the objective
+    
+    # Constraints
+    # Constraint 1: \sum W_i * IxX = n
+    A1 = sparse.csr_matrix(IxX.reshape(1, -1))  # Reshape into a 2D sparse matrix
+    l1 = np.array([n])       # Lower bound (equality, so l1 == u1)
+    u1 = np.array([n])       # Upper bound
+    
+    # Constraint 2: \sum W_i * IxX * f(C_i) = \sum f(C_i)
+    Cval1 = mu_XZ  # f(C_i)
+    Cval2 = mu_xZ
+    A2 = sparse.csr_matrix((IxX * Cval1).reshape(1, -1))  # Reshape into a 2D sparse matrix
+    l2 = np.array([np.sum(Cval2)])     # Lower bound (equality, so l2 == u2)
+    u2 = np.array([np.sum(Cval2)])     # Upper bound
+    
+    # Combine the constraints
+    A = sparse.vstack([A1, A2])  # Stack both constraint matrices vertically
+    l = np.hstack([l1, l2])      # Stack lower bounds
+    u = np.hstack([u1, u2])      # Stack upper bounds
+    
+    # Bounds for the decision variable W (W_i >= 1e-5)
+    W_lower_bound = 1e-5 * np.ones(n)
+    W_upper_bound = np.inf * np.ones(n)
+    
+    # OSQP solver setup
+    prob = osqp.OSQP()
+    prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False)
+    
+    # Solve the problem
+    res = prob.solve()
+
+    # Extract optimal W values
+    W_opt = res.x
+
+    return W_opt
+
+
+
 
 def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=10, batch_size=100):
 	col_feature = X + Z

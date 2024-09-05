@@ -730,20 +730,20 @@ if __name__ == "__main__":
 	np.random.seed(seednum)
 	random.seed(seednum)
 
-	scm, X, Y = random_generator.Random_SCM_Generator(
-		num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
-		condition_ID=True, 
-		condition_BD=False, 
-		condition_mSBD=False, 
-		condition_FD=False, 
-		condition_Tian=False, 
-		condition_gTian=False,
-		condition_product = False, 
-		discrete = True, 
-		seednum = seednum 
-	)
+	# scm, X, Y = random_generator.Random_SCM_Generator(
+	# 	num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
+	# 	condition_ID=True, 
+	# 	condition_BD=False, 
+	# 	condition_mSBD=False, 
+	# 	condition_FD=False, 
+	# 	condition_Tian=False, 
+	# 	condition_gTian=False,
+	# 	condition_product = False, 
+	# 	discrete = True, 
+	# 	seednum = seednum 
+	# )
 
-	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
+	scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
@@ -753,7 +753,7 @@ if __name__ == "__main__":
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
 
-	obs_data = scm.generate_samples(5000, seed=seednum)[topo_V]
+	obs_data = scm.generate_samples(50000, seed=seednum)[topo_V]
 
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
