@@ -25,6 +25,9 @@ import statmodules
 pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 
+# Suppress all UserWarning messages globally from the osqp package
+warnings.filterwarnings("ignore", category=UserWarning, module='osqp')
+
 def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, EB_samplesize = 200, EB_boosting = 5, seednum = 123, only_OM = False): 
 	"""
 	Estimate causal effects using the mSBD method.
@@ -637,10 +640,162 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = 200, EB_boo
 	
 	return ATE, VAR, lower_CI, upper_CI
 
+
+def estimate_SBD_osqp(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False):
+	np.random.seed(int(seednum))
+	random.seed(int(seednum))
+
+	# Assume satisfied_mSBD == True
+	topo_V = graph.find_topological_order(G)
+	dict_X, dict_Z, dict_Y = mSBD.check_SAC_with_results(G,X,Y, minimum = True)
+	X_list = list(tuple(dict_X.values()))
+	mSBD_length = len(dict_X)
+
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
+
+	m = len(X)
+
+	z_score = norm.ppf(1 - alpha_CI / 2)
+
+	ATE = {}
+	VAR = {}
+	lower_CI = {}
+	upper_CI = {}
+
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+
+	for estimator in list_estimators:
+		ATE[estimator] = {}
+		VAR[estimator] = {}
+		lower_CI[estimator] = {}
+		upper_CI[estimator] = {}
+
+	all_Z = []
+	for each_Z_list in list(tuple(dict_Z.values())):
+		all_Z += each_Z_list
+
+	# Compute causal effect estimations
+	if not all_Z:
+		for estimator in list_estimators:
+			for _, x_val in X_values_combinations.iterrows():
+				mask = (obs_data[X] == x_val.values).all(axis=1)
+				ATE[estimator][tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
+				VAR[estimator][tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
+	else:
+		L = 2
+		kf = KFold(n_splits=L, shuffle=True)
+		col_feature = list(set(all_Z + X))
+		col_label = Y
+
+		mu_models = {}
+		mu_eval_test_dict = {}
+		check_mu_train_dict = {}
+		check_mu_test_dict = {}
+
+		pi_eval_dict = {}
+		pi_acc_eval_dict = {}
+
+		for _, x_val in X_values_combinations.iterrows():
+			for train_index, test_index in kf.split(obs_data):
+				obs_train, obs_test = obs_data.iloc[train_index], obs_data.iloc[test_index]
+				check_mu_train_dict[m+1] = obs_train[Y].values.T[0]
+				check_mu_test_dict[m+1] = obs_test[Y].values.T[0]
+
+				for i in range(m, 0, -1):
+					col_feature = []
+					for j in range(1,i+1):
+						col_feature += dict_X[f'X{j}']
+						col_feature += dict_Z[f'Z{j}']
+					col_feature = sorted(col_feature, key=lambda x: topo_V.index(x))
+					
+					if i == m:
+						col_label = Y
+					else:
+						col_label = f'check_mu_{i+1}'
+					
+					mu_models[i] = statmodules.learn_mu(obs_train, col_feature, col_label, params=None)
+					mu_eval_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test[col_feature]))
+					obs_test.loc[:,f'mu_{i}'] = mu_eval_test_dict[i]
+					
+					obs_test_x = copy.copy(obs_test)
+					obs_test_x[dict_X[f'X{i}'][0]] = x_val.values[X.index(dict_X[f'X{i}'][0])]
+					obs_train_x = copy.copy(obs_train)
+					obs_train_x[dict_X[f'X{i}'][0]] = x_val.values[X.index(dict_X[f'X{i}'][0])]
+
+					check_mu_train_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_train_x[col_feature]))
+					obs_train.loc[:, f'check_mu_{i}'] = check_mu_train_dict[i]
+
+					check_mu_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test_x[col_feature]))
+					obs_test.loc[:, f'check_mu_{i}'] = check_mu_test_dict[i]
+
+					# If only_OM == False, then the weight should be computed. 
+					if only_OM == False:
+						if i == 1 and len(dict_Z['Z1']) == 0: 
+							IxiX = (obs_test[dict_X[f'X{i}'][0]].values == x_val.values[X.index(dict_X[f'X{i}'][0])]) * 1
+							P_X1_1 = np.mean(obs_test[dict_X[f'X{i}'][0]].values)
+							P_X1 = P_X1_1 * obs_test[dict_X[f'X{i}'][0]].values + (1-P_X1_1) * (1-obs_test[dict_X[f'X{i}'][0]].values )
+							pi_XZ = IxiX/P_X1
+							
+						else:
+							pi_XZ = statmodules.entropy_balancing_osqp(obs = obs_test, 
+																	x_val = x_val.values[X.index(dict_X[f'X{i}'][0])], 
+																	X = dict_X[f'X{i}'], 
+																	Z = list(set(col_feature) - set(dict_X[f'X{i}'])), 
+																	col_feature_1 = f'check_mu_{i}', 
+																	col_feature_2 = f'mu_{i}')
+						pi_eval_dict[i] = pi_XZ
+
+				# If only_OM == True (only returning OM, then no need to compute PW)
+				if only_OM:
+					OM_val = np.mean(obs_test['check_mu_1'])
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_val
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
+
+				# If only_OM == False (returning DML, OM, PW)
+				else:
+					pseudo_outcome = np.zeros(len(pi_eval_dict[m]))
+					pi_accumulated_dict = {}
+					pi_accumulated = np.ones(len(pi_eval_dict[m]))
+					for i in range(1,m+1):
+						pi_accumulated_dict[i] = pi_accumulated * pi_eval_dict[i]
+						pi_accumulated *= pi_eval_dict[i]
+
+					for i in range(m, 0, -1):
+						pseudo_outcome += pi_accumulated_dict[i] * (check_mu_test_dict[i+1] - mu_eval_test_dict[i])
+					pseudo_outcome += check_mu_test_dict[i]
+
+					OM_val = np.mean(obs_test['check_mu_1'])
+					IPW_val = np.mean(pi_accumulated_dict[m] * check_mu_test_dict[m+1])
+					AIPW_val = np.mean(pseudo_outcome)
+
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_val
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['check_mu_1'] - OM_val) ** 2 )
+					
+					ATE["DML"][tuple(x_val)] = ATE["DML"].get(tuple(x_val), 0) + AIPW_val
+					VAR["DML"][tuple(x_val)] = VAR["DML"].get(tuple(x_val), 0) + np.mean( (pseudo_outcome - AIPW_val) ** 2 )
+
+					ATE["IPW"][tuple(x_val)] = ATE["IPW"].get(tuple(x_val), 0) + IPW_val
+					VAR["IPW"][tuple(x_val)] = VAR["IPW"].get(tuple(x_val), 0) + np.mean( (pi_accumulated_dict[m] * check_mu_test_dict[m+1] - IPW_val) ** 2 )
+
+		for _, x_val in X_values_combinations.iterrows():
+			for estimator in list_estimators:
+				ATE[estimator][tuple(x_val)] /= L
+				VAR[estimator][tuple(x_val)] /= L
+
+
+	for _, x_val in X_values_combinations.iterrows():
+		for estimator in list_estimators:
+			mean_ATE_x = ATE[estimator][tuple(x_val)]
+			lower_x = (mean_ATE_x - z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			upper_x = (mean_ATE_x + z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			lower_CI[estimator][tuple(x_val)] = lower_x
+			upper_CI[estimator][tuple(x_val)] = upper_x
+	
+	return ATE, VAR, lower_CI, upper_CI
+
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
-	# seednum = int(time.time())
-	seednum = 1725047670
+	seednum = int(time.time())
 
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
@@ -674,14 +829,15 @@ if __name__ == "__main__":
 	satisfied_Tian = tian.check_Tian_criterion(G, X)
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 
-	truth = statmodules.ground_truth(scm, obs_data, X, Y)
+	y_val = np.ones(len(Y)).astype(int)
+	truth = statmodules.ground_truth(scm, obs_data, X, Y, y_val)
 
 	start_time = time.process_time()
 	EB_samplesize = 200
 	EB_boosting = 5
 	ATE, VAR, lower_CI, upper_CI = estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting, seednum = 123, only_OM = False)
 	end_time = time.process_time()
-	print(f'EB_samplesize: {EB_samplesize} with EB_boosting:{EB_boosting} takes {end_time - start_time}')
+	print(f'Time with SciPy minimizer: {end_time - start_time}')
 
 	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
 	
@@ -690,5 +846,19 @@ if __name__ == "__main__":
 
 	print("Rank Correlation")
 	print(rank_correlation_table)
+
+	start_time = time.process_time()
+	ATE, VAR, lower_CI, upper_CI = estimate_SBD_osqp(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False)
+	end_time = time.process_time()
+	print(f'Time with OSQP minimizer: {end_time - start_time}')
+
+	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
+	
+	print("Performance")
+	print(performance_table)
+
+	print("Rank Correlation")
+	print(rank_correlation_table)
+
 	
 
