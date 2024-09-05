@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
-from scipy.optimize import minimize
+# from scipy.optimize import minimize
 from scipy.stats import norm
 import copy
 from scipy import stats
