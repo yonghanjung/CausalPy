@@ -832,7 +832,7 @@ def discrete_variable_in_jungDML(G, X, Y):
 	'''
 	Check what variables must be discrete 
 	'''
-	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
+	adj_dict_components, adj_dict_operations = return_AC_tree(G, X, Y)
 	list_discrete_variables = []
 
 	for adj_dict_component in adj_dict_components.values():

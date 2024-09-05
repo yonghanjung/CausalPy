@@ -137,6 +137,7 @@ def FD_SCM(seednum = None):
 	return [scm, X, Y]
 
 
+
 def Napkin_SCM(seednum = None):
 	if seednum is not None: 
 		random.seed(int(seednum))
@@ -145,7 +146,8 @@ def Napkin_SCM(seednum = None):
 	def equation_W(U_WX, U_WY, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
 		prob_W = inv_logit( U_WX + U_WY + noise )
-		return np.random.binomial(1, prob_W)
+		return prob_W
+		# return np.random.binomial(1, prob_W)
 
 	def equation_R(W, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
@@ -184,7 +186,8 @@ def Napkin_FD_SCM(seednum = None):
 	def equation_W(U_WX, U_WZ, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
 		prob_W = inv_logit( U_WX + U_WZ + noise )
-		return np.random.binomial(1, prob_W)
+		return prob_W
+		# return np.random.binomial(1, prob_W)
 
 	def equation_R(W, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
@@ -193,17 +196,17 @@ def Napkin_FD_SCM(seednum = None):
 
 	def equation_X(U_WX, U_XY, R, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_X = inv_logit( 2 * R - 1 + 0.3 * U_WX + 0.3*U_XY + noise)
+		prob_X = inv_logit( 2 * R - 1 + 0.25 * (U_WX + U_XY) + noise)
 		return np.random.binomial(1, prob_X)
 
 	def equation_Z(U_WZ, X, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_Z = inv_logit( 3*(2 * X - 1) + 1.5 * U_WZ + noise)
+		prob_Z = inv_logit( 1*(2 * X - 1) + 0.5 * U_WZ + noise)
 		return np.random.binomial(1, prob_Z)
 
 	def equation_Y(U_XY, Z, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_Y = inv_logit( 2 * Z-1 + 0.3 * U_XY + noise )
+		prob_Y = inv_logit( 2*(2 *Z-1) + 0.5 * U_XY + noise )
 		return np.random.binomial(1, prob_Y)
 
 	scm = StructuralCausalModel()
