@@ -24,14 +24,14 @@ import identify
 import est_BD
 import est_mSBD
 import example_SCM
-
+	
 # Turn off alarms
 pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-# only_OM = False; seednum=123; EB_samplesize = 200; EB_boosting = 5
-def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_samplesize = 200, EB_boosting = 5):
+# only_OM = False; seednum=123;
+def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 	"""
 	Estimate the Average Treatment Effect (ATE) using the general framework.
 
@@ -96,7 +96,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 		pa_roota = get_values(variables = PA_RootA, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
 
 		# Compute the Q value for RootA
-		Q_roota, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA, pa_roota, roota, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+		Q_roota, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA, pa_roota, roota, obs_data, only_OM = only_OM, seednum = seednum)
 		return Q_roota
 
 	def handle_Next_RootA(RootA, PA_RootA, Next_RootA, Superset_Values, X, Y, superset_values, x_val, y_val):
@@ -133,7 +133,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 		# Check if the SAC criterion is satisfied for RootA_minus_Next
 		if mSBD.constructive_SAC_criterion(G, PA_RootA, RootA_minus_Next):
 			roota_minus_next =  [roota[RootA.index(variable)] for variable in RootA_minus_Next]
-			Q_roota_minus_next, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_minus_Next, pa_roota, roota_minus_next, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting) 
+			Q_roota_minus_next, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_minus_Next, pa_roota, roota_minus_next, obs_data, only_OM = only_OM, seednum = seednum) 
 			for estimator in list_estimators:
 				Q_roota_next[estimator] = min((Q_roota[estimator] / Q_roota_minus_next[estimator]), 1)
 			
@@ -153,7 +153,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 				Vj_i_index = RootA.index(Vj_i)
 				RootA_leq_i = RootA[:(Vj_i_index+1)]
 				roota_leq_i = get_values(variables = RootA_leq_i, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
-				Q_roota_leq_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_leq_i, pa_roota, roota_leq_i, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+				Q_roota_leq_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_leq_i, pa_roota, roota_leq_i, obs_data, only_OM = only_OM, seednum = seednum)
 
 				if Vj_i_index == 0:
 					for estimator in list_estimators:
@@ -161,7 +161,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 				else:
 					RootA_less_i = RootA[:(Vj_i_index)]
 					roota_less_i = get_values(variables = RootA_less_i, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
-					Q_roota_less_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_less_i, pa_roota, roota_less_i, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+					Q_roota_less_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_less_i, pa_roota, roota_less_i, obs_data, only_OM = only_OM, seednum = seednum)
 					for estimator in list_estimators:
 						Q_roota_next[estimator] *= Q_roota_leq_i[estimator]
 					Q_roota_next[estimator] *= min((Q_roota_leq_i[estimator] / Q_roota_less_i[estimator]), 1)
@@ -171,7 +171,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 
 		return Q_roota_next
 
-	def compute_delta_operation(Q_prev, S_curr, S_prev):
+	def compute_delta_operation(Q_prev_df, S_curr, S_prev):
 		"""
 		Computes Q_curr using Q_prev, where Q_prev -delta-> Q_curr
 
@@ -196,8 +196,14 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 		# Re-sorting the S_curr
 		S_curr = sorted(S_curr, key=lambda x: S_prev.index(x))
 
+		S_prev_keys = sorted(list(set(Q_prev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
+
+		# Domain of S_prev_keys
+		domain_S_prev_keys = Q_prev_df[S_prev_keys].drop_duplicates()
+	
 		# Iterating over all possible realization of S_prev
-		for s_prev in Q_prev.keys():
+		for s_prev in domain_S_prev_keys.itertuples(index=False):
+			s_prev = tuple(s_prev)
 			Q_curr[s_prev] = 1 # initialization 
 
 			for Vi in S_curr:
@@ -209,14 +215,10 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 				summed_variable_numerator = S_prev[S_prev.index(Vi)+1:]
 				summed_variable_denominator = S_prev[S_prev.index(Vi):]
 
-				# Get the indices in S_prev
-				indices_summed_variable_numerator = [S_prev.index(var) for var in summed_variable_numerator]
-				indices_summed_variable_denominator = [S_prev.index(var) for var in summed_variable_denominator]
-
-				# Domain for summed variables 
-				domain_summed_variable_numerator = set([tuple(s[i] for i in indices_summed_variable_numerator) for s in Q_prev.keys()])
-				domain_summed_variable_denominator = set([tuple(s[i] for i in indices_summed_variable_denominator) for s in Q_prev.keys()])
-
+				# Domain of summed_variable
+				domain_summed_variable_numerator = Q_prev_df[summed_variable_numerator].drop_duplicates()
+				domain_summed_variable_denominator = Q_prev_df[summed_variable_denominator].drop_duplicates()
+				
 				# Initialize numerator and denominator 
 				numerator = 0
 				denominator = 0 
@@ -224,23 +226,29 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 				# Compute Q_curr[(fixed_variable, summed_variable)] += Q_prev[(fixed_variable, summed_variable)]
 				# for numerator 
 				if len(summed_variable_numerator) == 0:
-					value_numerator = s_prev[:S_prev.index(Vi)+1]
-					numerator += Q_prev[value_numerator] 
+					numerator = Q_prev_df[(Q_prev_df[S_prev] == s_prev).all(axis=1)]['probability'].values[0]
 				else:
-					for summed_value_numerator in domain_summed_variable_numerator:
+					for summed_value_numerator in domain_summed_variable_numerator.itertuples(index=False):
+						summed_value_numerator = tuple(summed_value_numerator)
+						mask_summed = (Q_prev_df[summed_variable_numerator] == summed_value_numerator).all(axis=1)
+
 						fixed_value_numerator = s_prev[:S_prev.index(Vi)+1]
-						value_numerator = fixed_value_numerator + summed_value_numerator
-						numerator += Q_prev[value_numerator] 
+						mask_fixed = (Q_prev_df[fixed_variable_numerator] == fixed_value_numerator).all(axis=1)
+
+						numerator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
 
 				# for denominator  
-				if len(summed_variable_denominator) == 0:
-					value_numerator = s_prev[:S_prev.index(Vi)]
-					denominator += Q_prev[value_numerator] 
+				if len(fixed_variable_denominator) == 0:
+					denominator = 1
 				else:
-					for summed_value_denominator in domain_summed_variable_denominator:
+					for summed_value_denominator in domain_summed_variable_denominator.itertuples(index=False):
+						summed_value_denominator = tuple(summed_value_denominator)
+						mask_summed = (Q_prev_df[summed_variable_denominator] == summed_value_denominator).all(axis=1)
+
 						fixed_value_denominator = s_prev[:S_prev.index(Vi)]
-						value_denominator = fixed_value_denominator + summed_value_denominator
-						denominator += Q_prev[value_denominator] 
+						mask_fixed = (Q_prev_df[fixed_variable_denominator] == fixed_value_denominator).all(axis=1)
+
+						denominator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
 
 				Qi = numerator / denominator
 				Q_curr[s_prev] *= Qi
@@ -266,15 +274,19 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 			and the values are the computed probabilities Q[Si].
 		"""
 
-		S_prev_keys = list(set(Q_prev_df.keys()) - set(['estimator']) - set(['probability']))
+		# Variables in Q_prev_df
+		S_prev_keys = sorted( list(set(Q_prev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
 		
+		# Variables to be summed
 		S_summed = sorted(list(set(S_prev) - set(S_curr)), key=lambda x: S_prev_keys.index(x))
 
 		if len(S_summed) == 0:
 			return Q_prev_df 
 
+		# Key variables after marginalization  
 		S_diff = sorted(list(set(S_prev_keys) - set(S_summed)), key=lambda x: S_prev_keys.index(x))
 
+		# Initialization 
 		Q_diff = {}
 
 		# Domain of S_diff 
@@ -387,17 +399,18 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 					Q_Dj_val = handle_RootA(RootA = Dj, PA_RootA = None, Superset_Values = D_minus_Y, X = X, Y = Y, superset_values = d_minus_y, x_val = x_val, y_val = y_val)
 					for estimator in list_estimators:
 						Q_D_val[estimator] *= Q_Dj_val[estimator]
+					continue
 
 				# Case 2. len(adj_dict_component) == 2 (That is, Di = adj_dict_component[1])
-				# elif len(adj_dict_component) == 2: 
-				# 	S0 = adj_dict_component[0]
-				# 	PA_S0 = graph.find_parents(G, S0)
-				# 	Dj = adj_dict_component[1]
+				elif len(adj_dict_component) == 2: 
+					S0 = adj_dict_component[0]
+					PA_S0 = graph.find_parents(G, S0)
+					Dj = adj_dict_component[1]
 
-				# 	Q_Dj_val = handle_Next_RootA(RootA = S0, PA_RootA = PA_S0, Next_RootA = Dj, Superset_Values = D_minus_Y, X = X, Y = Y, superset_values = d_minus_y, x_val = x_val, y_val = y_val)
-				# 	for estimator in list_estimators:
-				# 		Q_D_val[estimator] *= Q_Dj_val[estimator]
-
+					Q_Dj_val = handle_Next_RootA(RootA = S0, PA_RootA = PA_S0, Next_RootA = Dj, Superset_Values = D_minus_Y, X = X, Y = Y, superset_values = d_minus_y, x_val = x_val, y_val = y_val)
+					for estimator in list_estimators:
+						Q_D_val[estimator] *= Q_Dj_val[estimator]
+					continue	
 
 				# Case 3. len(adj_dict_component) > 2 (That is, Di = adj_dict_component[1])
 				else:
@@ -410,6 +423,20 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 					S_prev = adj_dict_component_copy.pop(0)
 					S_prev = sorted(S_prev, key=lambda x: topo_V.index(x))
 					PA_Sprev = graph.find_parents(G, S_prev)
+
+					# Value of PA_Sprev
+					pa_sprev_value = {}
+					# Loop through each variable in Dj_variables
+					for var in PA_Sprev:
+						if var in Y:
+							pa_sprev_value[var] = y_val[Y.index(var)]  # Rule 1: Set value as y_val for 'Y'
+						elif var in X:
+							pa_sprev_value[var] = x_val[X.index(var)]  # Rule 2: Set value as x_val for 'X'
+						elif var in D_minus_Y:
+							pa_sprev_value[var] = getattr(d_minus_y, var)  # Rule 3: Set value as d_minus_y for 'D_minus_Y'
+						else:
+							pa_sprev_value[var] = 1 
+
 					domain_Sprev = [tuple(v) for v in obs_data[S_prev].drop_duplicates().itertuples(index=False)]
 					
 					Q_Sprev = {}
@@ -417,7 +444,8 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 						Q_Sprev[estimator] = {}
 
 					for s_prev in domain_Sprev:
-						Q_Sprev_val = handle_RootA(RootA = S_prev, PA_RootA = PA_Sprev, Superset_Values = S_prev, X = X, Y = Y, superset_values = pd.Series(s_prev, S_prev), x_val = x_val, y_val = y_val)
+						Q_Sprev_val, _, _, _ = est_mSBD.estimate_mSBD_xval_yval(G, PA_Sprev, S_prev, list(pa_sprev_value.values()), s_prev, obs_data, only_OM = only_OM, seednum = seednum)
+						# Q_Sprev_val = handle_RootA(RootA = S_prev, PA_RootA = PA_Sprev, Superset_Values = S_prev, X = X, Y = Y, superset_values = pd.Series(s_prev, S_prev), x_val = x_val, y_val = y_val)
 						for estimator in list_estimators:
 							Q_Sprev[estimator][s_prev] = Q_Sprev_val[estimator]
 
@@ -433,19 +461,21 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 						if operator_Scurr == 'δ':
 							Q_Scurr = {}
 							for estimator in list_estimators:
-								Q_Scurr[estimator] = compute_delta_operation(Q_Sprev[estimator], S_curr, S_prev)
+								Q_Scurr[estimator] = compute_delta_operation(Q_Sprev_df[Q_Sprev_df['estimator'] == estimator], S_curr, S_prev)
+							Q_Scurr_df = convert_to_dataframe(Q_Scurr, S_prev, estimator_header = True) # THIS PART IS WRONG!!!
 
 						elif operator_Scurr == 'Σ':
 							for estimator in list_estimators:
 								Q_Scurr[estimator] = compute_Sigma_operation(Q_Sprev_df[Q_Sprev_df['estimator'] == estimator], S_curr, S_prev)
+							keys_Q_Sprev_df = sorted( list(set(Q_Sprev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
+							keys_Q_Scurr_df = sorted( list(set(keys_Q_Sprev_df) - (set(S_prev) - set(S_curr))), key=lambda x: topo_V.index(x))
+							Q_Scurr_df = convert_to_dataframe(Q_Scurr, keys_Q_Scurr_df, estimator_header = True) # THIS PART IS WRONG!!!
 
-						Q_Scurr_df = convert_to_dataframe(Q_Scurr, S_prev, estimator_header = True)
+						S_prev = copy.copy(S_curr)
+						Q_Sprev = copy.copy(Q_Scurr)
+						Q_Sprev_df = copy.copy(Q_Scurr_df)
 
-						S_prev = S_curr 
-						Q_Sprev = Q_Scurr
-						Q_Sprev_df = Q_Scurr_df
-
-					Q_Dj_df = Q_Scurr_df
+					Q_Dj_df = copy.copy(Q_Scurr_df)
 					Q_Dj_val = {}
 					
 					# Specify the value of dj and pa_dj 
@@ -473,13 +503,14 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_
 						probability_value = filtered_df['probability'].values[0]
 						Q_Dj_val[estimator] = probability_value
 						Q_D_val[estimator] *= Q_Dj_val[estimator]
+					continue
 
 			for estimator in list_estimators:
 				ATE[estimator][x_val_tuple] += Q_D_val[estimator]
 
 	return ATE
 
-def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200, EB_boosting = 5):
+def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -517,7 +548,7 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200
 				for variable in PA_V_SX
 			]
 			# Compute Q[V\SX] 
-			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum)
 
 			# Compute Q[SX\X] 
 			PA_SX_X = graph.find_parents(G, SX_X)
@@ -533,14 +564,14 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200
 				for variable in PA_SX_X
 			]
 			# Compute Q[SX_X] 
-			Q_SX_X_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_SX_X, SX_X, pa_sx_x, sx_x, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+			Q_SX_X_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_SX_X, SX_X, pa_sx_x, sx_x, obs_data, only_OM = only_OM, seednum = seednum)
 
 			for estimator in list_estimators:
 				ATE[estimator][tuple(x_val)] += (Q_V_SX_val[estimator] * Q_SX_X_val[estimator])
 
 	return ATE
 
-def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200, EB_boosting = 5):
+def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -606,7 +637,7 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 20
 				for variable in PA_V_SX
 			]
 			# Compute Q[V\SX] 
-			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum)
 			for estimator in list_estimators:
 				Q_VX_val[estimator] *= Q_V_SX_val[estimator]
 
@@ -629,7 +660,7 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 20
 					for variable in PA_SXi_XCi
 				]
 				# Compute Q[SX_X] 
-				Q_SXi_Xci_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_SXi_XCi, SXi_XCi, pa_sx_x, sxi_xci, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+				Q_SXi_Xci_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_SXi_XCi, SXi_XCi, pa_sx_x, sxi_xci, obs_data, only_OM = only_OM, seednum = seednum)
 				for estimator in list_estimators:
 					Q_VX_val[estimator] *= Q_SXi_Xci_val[estimator]
 
@@ -638,7 +669,7 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 20
 
 	return ATE
 
-def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize = 200, EB_boosting = 5):
+def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -688,7 +719,7 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize
 				]
 
 				# Compute Q[Di] := P(di | do(xi)) 
-				Q_Di_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, Xi, Di, xi, di, obs_data, only_OM = only_OM, seednum = seednum, EB_samplesize = EB_samplesize, EB_boosting = EB_boosting)
+				Q_Di_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, Xi, Di, xi, di, obs_data, only_OM = only_OM, seednum = seednum)
 
 				for estimator in list_estimators:
 					Q_D_val[estimator] *= Q_Di_val[estimator]
@@ -697,7 +728,7 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, EB_samplesize
 				ATE[estimator][tuple(x_val)] += Q_D_val[estimator]
 	return ATE
 
-def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, EB_samplesize = 200, EB_boosting = 5):
+def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
 	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
@@ -717,6 +748,14 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM = False)
 		return ATE 
 
+	# elif satisfied_Tian:
+	# 	ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False)
+	# 	return ATE 
+
+	# elif satisfied_gTian:
+	# 	ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False)
+	# 	return ATE 
+
 	else: 
 		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
 		return ATE 
@@ -724,14 +763,15 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
-	seednum = int(time.time())
+	# seednum = int(time.time())
+	seednum = 12345
 
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
 	random.seed(seednum)
 
 	# scm, X, Y = random_generator.Random_SCM_Generator(
-	# 	num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
+	# 	num_observables=10, num_unobservables=5, num_treatments=2, num_outcomes=1,
 	# 	condition_ID=True, 
 	# 	condition_BD=False, 
 	# 	condition_mSBD=False, 
@@ -743,17 +783,18 @@ if __name__ == "__main__":
 	# 	seednum = seednum 
 	# )
 
-	scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
+	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
+	scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
 
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
 
-	obs_data = scm.generate_samples(50000, seed=seednum)[topo_V]
+	obs_data = scm.generate_samples(5000, seed=seednum)[topo_V]
 
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
@@ -763,7 +804,7 @@ if __name__ == "__main__":
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 	satisfied_product = tian.check_product_criterion(G, X, Y)
 
-	# print(identify.causal_identification(G, X, Y, True))
+	print(identify.causal_identification(G, X, Y, True))
 	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
 
 	y_val = np.ones(len(Y)).astype(int)
