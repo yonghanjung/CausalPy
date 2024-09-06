@@ -284,4 +284,104 @@ def Nested_Napkin_SCM(seednum = None):
 	Y = ['Y']
 
 	return [scm, X, Y]
+
+def Napkin_FD_SCM(seednum = None):
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def equation_W(U_WX, U_WZ, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_W = inv_logit( U_WX + U_WZ + noise )
+		return prob_W
+		# return np.random.binomial(1, prob_W)
+
+	def equation_R(W, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_R = inv_logit(W - 3 + noise) 
+		return np.random.binomial(1, prob_R)
+
+	def equation_X(U_WX, U_XY, R, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_X = inv_logit( 2 * R - 1 + 0.5 * (U_WX + U_XY) + noise)
+		return np.random.binomial(1, prob_X)
+
+	def equation_Z(U_WZ, X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_Z = inv_logit( 2*(2 * X - 1) + 0.5 * U_WZ + noise)
+		return np.random.binomial(1, prob_Z)
+
+	def equation_Y(U_XY, Z, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_Y = inv_logit( 2*(2 *Z-1) + 0.5 * U_XY + noise )
+		return np.random.binomial(1, prob_Y)
+
+	scm = StructuralCausalModel()
+	scm.add_unobserved_variable('U_WX', stats.norm(0, 1))
+	scm.add_unobserved_variable('U_WZ', stats.norm(0, 1))
+	scm.add_unobserved_variable('U_XY', stats.norm(0, 1))
+	scm.add_observed_variable('W', equation_W, ['U_WX', 'U_WZ'], stats.norm(0, 0.1))
+	scm.add_observed_variable('R', equation_R, ['W'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X', equation_X, ['U_WX', 'U_XY', 'R'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z', equation_Z, ['U_WZ', 'X'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y', equation_Y, ['U_XY', 'Z'], stats.norm(0, 0.1))
+
+	X = ['X']
+	Y = ['Y']
+
+	return [scm, X, Y]
+
+
+def Double_Napkin_SCM(seednum = None):
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def equation_V1(U_V1X, U_V1Y, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_V1 = inv_logit( -2*U_V1X + U_V1Y + 1 + noise )
+		return np.random.binomial(1, prob_V1)
+
+	def equation_V2(U_V4V2, V3, V1, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_V2 = inv_logit( U_V4V2 + (2*V1-1) - 0.5*(2*V3-1) + noise )
+		return np.random.binomial(1, prob_V2)
+
+	def equation_V3(V4, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_V3 = inv_logit( 2*V4 - 1 + noise )
+		return np.random.binomial(1, prob_V3)
+
+	def equation_V4(U_V4V2, U_V4X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_V4 = inv_logit( U_V4V2 + U_V4X + noise)
+		return prob_V4
+		# return np.random.binomial(1, prob_V4)
+
+	def equation_X(U_V4X, U_V1X, V2, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_X = inv_logit( 2 * (2*V2-1) + 0.3 * U_V4X + (2*U_V1X-1) + noise )
+		return np.random.binomial(1, prob_X)
+
+	def equation_Y(U_V1Y, X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_Y = inv_logit( 2 * X -1  + 1.5 * U_V1Y + noise )
+		return np.random.binomial(1, prob_Y)
+
+	scm = StructuralCausalModel()
+	scm.add_unobserved_variable('U_V4V2', stats.norm(0, 1))
+	scm.add_unobserved_variable('U_V4X', stats.norm(0, 1))
+	scm.add_unobserved_variable('U_V1X', stats.norm(0, 1))
+	scm.add_unobserved_variable('U_V1Y', stats.norm(0, 1))
+	scm.add_observed_variable('V1', equation_V1, ['U_V1X', 'U_V1Y'], stats.norm(0, 0.1))
+	scm.add_observed_variable('V2', equation_V2, ['U_V4V2', 'V3', 'V1'], stats.norm(0, 0.1))
+	scm.add_observed_variable('V3', equation_V3, ['V4'], stats.norm(0, 0.1))
+	scm.add_observed_variable('V4', equation_V4, ['U_V4V2', 'U_V4X'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X', equation_X, ['U_V4X', 'U_V1X', 'V2'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y', equation_Y, ['U_V1Y', 'X'], stats.norm(0, 0.1))
+
+	X = ['X']
+	Y = ['Y']
+
+	return [scm, X, Y]
 	

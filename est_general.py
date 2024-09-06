@@ -202,15 +202,11 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 		domain_S_prev_keys = Q_prev_df[S_prev_keys].drop_duplicates()
 	
 		# Iterating over all possible realization of S_prev
-		for s_prev in domain_S_prev_keys.itertuples(index=False):
-			s_prev = tuple(s_prev)
-			Q_curr[s_prev] = 1 # initialization 
+		for s_prev_key in domain_S_prev_keys.itertuples(index=False):
+			s_prev_key = tuple(s_prev_key)
+			Q_curr[s_prev_key] = 1 # initialization 
 
 			for Vi in S_curr:
-				# Define variables to be fixed for each numerator and denominator 
-				fixed_variable_numerator = S_prev[:S_prev.index(Vi)+1]
-				fixed_variable_denominator = S_prev[:S_prev.index(Vi)]
-
 				# Define variables to be summed for each numerator and denominator 
 				summed_variable_numerator = S_prev[S_prev.index(Vi)+1:]
 				summed_variable_denominator = S_prev[S_prev.index(Vi):]
@@ -218,6 +214,10 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 				# Domain of summed_variable
 				domain_summed_variable_numerator = Q_prev_df[summed_variable_numerator].drop_duplicates()
 				domain_summed_variable_denominator = Q_prev_df[summed_variable_denominator].drop_duplicates()
+
+				# Define variables to be fixed for each numerator and denominator 
+				fixed_variable_numerator = sorted( list(set(S_prev_keys) - set(summed_variable_numerator)), key=lambda x: topo_V.index(x))
+				fixed_variable_denominator = sorted( list(set(S_prev_keys) - set(summed_variable_denominator)), key=lambda x: topo_V.index(x))
 				
 				# Initialize numerator and denominator 
 				numerator = 0
@@ -226,13 +226,13 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 				# Compute Q_curr[(fixed_variable, summed_variable)] += Q_prev[(fixed_variable, summed_variable)]
 				# for numerator 
 				if len(summed_variable_numerator) == 0:
-					numerator = Q_prev_df[(Q_prev_df[S_prev] == s_prev).all(axis=1)]['probability'].values[0]
+					numerator = Q_prev_df[(Q_prev_df[S_prev_keys] == s_prev_key).all(axis=1)]['probability'].values[0]
 				else:
 					for summed_value_numerator in domain_summed_variable_numerator.itertuples(index=False):
 						summed_value_numerator = tuple(summed_value_numerator)
 						mask_summed = (Q_prev_df[summed_variable_numerator] == summed_value_numerator).all(axis=1)
 
-						fixed_value_numerator = s_prev[:S_prev.index(Vi)+1]
+						fixed_value_numerator = tuple([s_prev_key[S_prev_keys.index(Vi)] for Vi in fixed_variable_numerator])
 						mask_fixed = (Q_prev_df[fixed_variable_numerator] == fixed_value_numerator).all(axis=1)
 
 						numerator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
@@ -245,13 +245,13 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 						summed_value_denominator = tuple(summed_value_denominator)
 						mask_summed = (Q_prev_df[summed_variable_denominator] == summed_value_denominator).all(axis=1)
 
-						fixed_value_denominator = s_prev[:S_prev.index(Vi)]
+						fixed_value_denominator = tuple([s_prev_key[S_prev_keys.index(Vi)] for Vi in fixed_variable_denominator])
 						mask_fixed = (Q_prev_df[fixed_variable_denominator] == fixed_value_denominator).all(axis=1)
 
 						denominator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
 
 				Qi = numerator / denominator
-				Q_curr[s_prev] *= Qi
+				Q_curr[s_prev_key] *= Qi
 
 		return Q_curr
 
@@ -445,7 +445,6 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 
 					for s_prev in domain_Sprev:
 						Q_Sprev_val, _, _, _ = est_mSBD.estimate_mSBD_xval_yval(G, PA_Sprev, S_prev, list(pa_sprev_value.values()), s_prev, obs_data, only_OM = only_OM, seednum = seednum)
-						# Q_Sprev_val = handle_RootA(RootA = S_prev, PA_RootA = PA_Sprev, Superset_Values = S_prev, X = X, Y = Y, superset_values = pd.Series(s_prev, S_prev), x_val = x_val, y_val = y_val)
 						for estimator in list_estimators:
 							Q_Sprev[estimator][s_prev] = Q_Sprev_val[estimator]
 
@@ -462,14 +461,15 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 							Q_Scurr = {}
 							for estimator in list_estimators:
 								Q_Scurr[estimator] = compute_delta_operation(Q_Sprev_df[Q_Sprev_df['estimator'] == estimator], S_curr, S_prev)
-							Q_Scurr_df = convert_to_dataframe(Q_Scurr, S_prev, estimator_header = True) # THIS PART IS WRONG!!!
+							keys_Q_Sprev_df = sorted( list(set(Q_Sprev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
+							Q_Scurr_df = convert_to_dataframe(Q_Scurr, keys_Q_Sprev_df, estimator_header = True) 
 
 						elif operator_Scurr == 'Σ':
 							for estimator in list_estimators:
 								Q_Scurr[estimator] = compute_Sigma_operation(Q_Sprev_df[Q_Sprev_df['estimator'] == estimator], S_curr, S_prev)
 							keys_Q_Sprev_df = sorted( list(set(Q_Sprev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
 							keys_Q_Scurr_df = sorted( list(set(keys_Q_Sprev_df) - (set(S_prev) - set(S_curr))), key=lambda x: topo_V.index(x))
-							Q_Scurr_df = convert_to_dataframe(Q_Scurr, keys_Q_Scurr_df, estimator_header = True) # THIS PART IS WRONG!!!
+							Q_Scurr_df = convert_to_dataframe(Q_Scurr, keys_Q_Scurr_df, estimator_header = True) 
 
 						S_prev = copy.copy(S_curr)
 						Q_Sprev = copy.copy(Q_Scurr)
@@ -748,13 +748,17 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM = False)
 		return ATE 
 
-	# elif satisfied_Tian:
-	# 	ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False)
-	# 	return ATE 
+	elif satisfied_Tian:
+		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False)
+		return ATE 
 
-	# elif satisfied_gTian:
-	# 	ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False)
-	# 	return ATE 
+	elif satisfied_product:
+		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False)
+		return ATE 
+
+	elif satisfied_gTian:
+		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False)
+		return ATE 
 
 	else: 
 		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
@@ -763,15 +767,15 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
-	# seednum = int(time.time())
-	seednum = 12345
+	seednum = int(time.time())
+	# seednum = 1725645528
 
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
 	random.seed(seednum)
 
 	# scm, X, Y = random_generator.Random_SCM_Generator(
-	# 	num_observables=10, num_unobservables=5, num_treatments=2, num_outcomes=1,
+	# 	num_observables=7, num_unobservables=4, num_treatments=2, num_outcomes=1,
 	# 	condition_ID=True, 
 	# 	condition_BD=False, 
 	# 	condition_mSBD=False, 
@@ -783,12 +787,13 @@ if __name__ == "__main__":
 	# 	seednum = seednum 
 	# )
 
-	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
+	scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
-	scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.Double_Napkin_SCM(seednum = seednum)
 
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
@@ -811,22 +816,6 @@ if __name__ == "__main__":
 	truth = statmodules.ground_truth(scm, obs_data, X, Y, y_val)
 
 	ATE = estimate_case_by_case(G, X, Y, y_val, obs_data)
-
-	# if satisfied_BD:
-	# 	ATE, _, _, _ = est_BD.estimate_BD(G, X, Y, obs_data, only_OM = False)
-	# if satisfied_mSBD:
-	# 	if len(Y) == 1:
-	# 		ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM = False)
-	# 	else:
-	# 		ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM = False)
-	# elif satisfied_Tian:
-	# 	ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False)
-	# elif satisfied_product:
-	# 	ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False)
-	# elif satisfied_gTian:
-	# 	ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False)
-	# else:
-	# 	ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
 
 	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
 	print("Performance")
