@@ -30,7 +30,251 @@ pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-# only_OM = False; seednum=123;
+def discreteness_checker(G, X, Y, obs_data, tell_me_what_discrete = True):
+	# Function to check if the columns are binary
+	def check_if_binary(obs_data, variables):
+		binary_vars = {}
+		for var in variables:
+			unique_vals = obs_data[var].unique()
+			is_binary = set(unique_vals) <= {0, 1}  # Check if unique values are within {0, 1}
+			binary_vars[var] = is_binary
+		return binary_vars
+
+	# Check if satisfied_BD or satisfied_mSBD holds
+	satisfied_BD = adjustment.check_admissibility(G, X, Y)
+	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
+
+	if satisfied_BD or satisfied_mSBD:
+		# First check if X + Y are binary
+		binary_status = check_if_binary(obs_data, X + Y)
+		for var, is_var_binary in binary_status.items():
+			if not is_var_binary:
+				raise ValueError(f'{X+Y} must be discrete (binary). However, {var} is not.')
+		
+		if tell_me_what_discrete:
+			message = f'{X+Y} must be discrete.'
+			return (True, message)
+		else: 
+			return True
+
+	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
+	list_discrete_variables = []
+
+	for adj_dict_component in adj_dict_components.values():
+		RootA = adj_dict_component[0]
+		PA_RootA = graph.find_parents(G, RootA)
+		list_discrete_variables = list_discrete_variables + PA_RootA + RootA 
+
+	list_discrete_variables = list(set(list_discrete_variables))
+
+	# Ensure all relevant variables (including X + Y) are discrete
+	must_be_discrete = list(set(list_discrete_variables + X + Y))
+	binary_status = check_if_binary(obs_data, must_be_discrete)
+
+	for (var, is_var_binary) in binary_status.items():
+		if is_var_binary == False:
+			raise ValueError(f'{must_be_discrete} must be discrete (binary). However, {var} is not.')
+
+	if tell_me_what_discrete:
+		message = f'{must_be_discrete} must be discrete.'
+		return (True, message)
+	else: 
+		return True
+
+def compute_delta_operation(G, Q_prev_df, S_curr, S_prev):
+	"""
+	Computes Q_curr using Q_prev, where Q_prev -delta-> Q_curr
+
+	Parameters:
+	- Q_prev: dict
+		A dictionary where the keys are tuples representing all possible values of S_prev, 
+		and the values are the corresponding probabilities.
+	- S_curr: list
+		A list of variable names representing the subset of S_prev for which we want to compute Q[Si].
+	- S_prev: list
+		A list of variable names representing the superset that includes all variables in Si.
+
+	Returns:
+	- Q_curr: dict
+		A dictionary where the keys are tuples representing all possible values of Si, 
+		and the values are the computed probabilities Q[Si].
+	"""
+	# Define topo_V
+	topo_V = graph.find_topological_order(G)
+
+	# Initialize Q_curr
+	Q_curr = {}
+
+	# Re-sorting the S_curr
+	S_curr = sorted(S_curr, key=lambda x: S_prev.index(x))
+
+	S_prev_keys = sorted(list(set(Q_prev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
+
+	# Domain of S_prev_keys
+	domain_S_prev_keys = Q_prev_df[S_prev_keys].drop_duplicates()
+
+	# Iterating over all possible realization of S_prev
+	for s_prev_key in domain_S_prev_keys.itertuples(index=False):
+		s_prev_key = tuple(s_prev_key)
+		Q_curr[s_prev_key] = 1 # initialization 
+
+		for Vi in S_curr:
+			# Define variables to be summed for each numerator and denominator 
+			summed_variable_numerator = S_prev[S_prev.index(Vi)+1:]
+			summed_variable_denominator = S_prev[S_prev.index(Vi):]
+
+			# Domain of summed_variable
+			domain_summed_variable_numerator = Q_prev_df[summed_variable_numerator].drop_duplicates()
+			domain_summed_variable_denominator = Q_prev_df[summed_variable_denominator].drop_duplicates()
+
+			# Define variables to be fixed for each numerator and denominator 
+			fixed_variable_numerator = sorted( list(set(S_prev_keys) - set(summed_variable_numerator)), key=lambda x: topo_V.index(x))
+			fixed_variable_denominator = sorted( list(set(S_prev_keys) - set(summed_variable_denominator)), key=lambda x: topo_V.index(x))
+			
+			# Initialize numerator and denominator 
+			numerator = 0
+			denominator = 0 
+
+			# Compute Q_curr[(fixed_variable, summed_variable)] += Q_prev[(fixed_variable, summed_variable)]
+			# for numerator 
+			if len(summed_variable_numerator) == 0:
+				numerator = Q_prev_df[(Q_prev_df[S_prev_keys] == s_prev_key).all(axis=1)]['probability'].values[0]
+			else:
+				for summed_value_numerator in domain_summed_variable_numerator.itertuples(index=False):
+					summed_value_numerator = tuple(summed_value_numerator)
+					mask_summed = (Q_prev_df[summed_variable_numerator] == summed_value_numerator).all(axis=1)
+
+					fixed_value_numerator = tuple([s_prev_key[S_prev_keys.index(Vi)] for Vi in fixed_variable_numerator])
+					mask_fixed = (Q_prev_df[fixed_variable_numerator] == fixed_value_numerator).all(axis=1)
+
+					numerator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
+
+			# for denominator  
+			if len(fixed_variable_denominator) == 0:
+				denominator = 1
+			else:
+				for summed_value_denominator in domain_summed_variable_denominator.itertuples(index=False):
+					summed_value_denominator = tuple(summed_value_denominator)
+					mask_summed = (Q_prev_df[summed_variable_denominator] == summed_value_denominator).all(axis=1)
+
+					fixed_value_denominator = tuple([s_prev_key[S_prev_keys.index(Vi)] for Vi in fixed_variable_denominator])
+					mask_fixed = (Q_prev_df[fixed_variable_denominator] == fixed_value_denominator).all(axis=1)
+
+					denominator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
+
+			Qi = numerator / denominator
+			Q_curr[s_prev_key] *= Qi
+
+	return Q_curr
+
+def compute_Sigma_operation(G, Q_prev_df, S_curr, S_prev):
+	"""
+	Computes Q_curr using Q_prev, where Q_prev -delta-> Q_curr
+
+	Parameters:
+	- Q_prev: dict
+		A dictionary where the keys are tuples representing all possible values of S_prev, 
+		and the values are the corresponding probabilities.
+	- S_curr: list
+		A list of variable names representing the subset of S_prev for which we want to compute Q[Si].
+	- S_prev: list
+		A list of variable names representing the superset that includes all variables in Si.
+
+	Returns:
+	- Q_curr: dict
+		A dictionary where the keys are tuples representing all possible values of Si, 
+		and the values are the computed probabilities Q[Si].
+	"""
+	# Define topo_V
+	topo_V = graph.find_topological_order(G)
+
+	# Variables in Q_prev_df
+	S_prev_keys = sorted( list(set(Q_prev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
+	
+	# Variables to be summed
+	S_summed = sorted(list(set(S_prev) - set(S_curr)), key=lambda x: S_prev_keys.index(x))
+
+	if len(S_summed) == 0:
+		return Q_prev_df 
+
+	# Key variables after marginalization  
+	S_diff = sorted(list(set(S_prev_keys) - set(S_summed)), key=lambda x: S_prev_keys.index(x))
+
+	# Initialization 
+	Q_diff = {}
+
+	# Domain of S_diff 
+	if len(S_diff) > 1:
+		domain_S_diff = Q_prev_df[S_diff].drop_duplicates()
+	else:
+		domain_S_diff = set(np.unique(Q_prev_df[S_summed]))
+	
+	if len(S_summed) > 1:
+		domain_S_summed = Q_prev_df[S_summed].drop_duplicates()
+	else:
+		domain_S_summed = set(np.unique(Q_prev_df[S_summed]))
+
+	# Iterating over all possible realization of S_prev
+	for s_diff in domain_S_diff[S_diff[0]] if len(S_diff) == 1 else domain_S_diff.itertuples(index=False):
+		if len(S_diff) > 1:
+			s_diff = tuple(s_diff)
+		Q_diff[s_diff] = 0 # initialization 
+		for s_summed in domain_S_summed:
+			mask_summed = (Q_prev_df[S_summed] == s_summed).all(axis=1)
+			mask_diff = (Q_prev_df[S_diff] == s_diff).all(axis=1)
+			Q_diff[s_diff] += Q_prev_df[(mask_summed) & (mask_diff)]['probability'].values[0]
+
+	return Q_diff
+
+def convert_to_dataframe(data, variable_names, estimator_header=False):
+	"""
+	Converts a nested dictionary of estimators and variable combinations to a pandas DataFrame.
+
+	Parameters:
+	- data: dict
+		A dictionary where:
+		- If estimator_header is True: The top-level keys are estimator names, and values are dictionaries
+		  mapping tuples of variable values to numerical results.
+		- If estimator_header is False: A dictionary where keys are tuples of variable values
+		  and values are numerical results.
+	- variable_names: list
+		A list of strings representing the variable names (e.g., ['X', 'Z', 'Y']).
+	- estimator_header: bool (default False)
+		If True, includes an 'Estimator' column in the DataFrame.
+
+	Returns:
+	- pd.DataFrame
+		A DataFrame where each row corresponds to a combination of variable values (and estimators if applicable).
+	"""
+
+	# Check for the right length of variable names in the second-level keys
+	if estimator_header:
+		for estimator, results in data.items():
+			for key in results.keys():
+				if len(key) != len(variable_names):
+					raise ValueError(f"Key {key} does not match the length of variable names {variable_names}")
+	else:
+		for key in data.keys():
+			if len(key) != len(variable_names):
+				raise ValueError(f"Key {key} does not match the length of variable names {variable_names}")
+
+	# Convert the nested dictionary to a list of dictionaries for easy DataFrame creation
+	if estimator_header:
+		data_list = [
+			{**dict(zip(variable_names, variables)), 'estimator': estimator, 'probability': value}
+			for estimator, results in data.items()
+			for variables, value in results.items()
+		]
+	else:
+		# Create a list of dictionaries where each entry has variable names and the probability
+		data_list = [{**dict(zip(variable_names, key)), 'probability': value} for key, value in data.items()]
+
+	# Create the DataFrame
+	df = pd.DataFrame(data_list)
+
+	return df
+
+
 def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 	"""
 	Estimate the Average Treatment Effect (ATE) using the general framework.
@@ -171,196 +415,6 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 
 		return Q_roota_next
 
-	def compute_delta_operation(Q_prev_df, S_curr, S_prev):
-		"""
-		Computes Q_curr using Q_prev, where Q_prev -delta-> Q_curr
-
-		Parameters:
-		- Q_prev: dict
-			A dictionary where the keys are tuples representing all possible values of S_prev, 
-			and the values are the corresponding probabilities.
-		- S_curr: list
-			A list of variable names representing the subset of S_prev for which we want to compute Q[Si].
-		- S_prev: list
-			A list of variable names representing the superset that includes all variables in Si.
-
-		Returns:
-		- Q_curr: dict
-			A dictionary where the keys are tuples representing all possible values of Si, 
-			and the values are the computed probabilities Q[Si].
-		"""
-
-		# Initialize Q_curr
-		Q_curr = {}
-
-		# Re-sorting the S_curr
-		S_curr = sorted(S_curr, key=lambda x: S_prev.index(x))
-
-		S_prev_keys = sorted(list(set(Q_prev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
-
-		# Domain of S_prev_keys
-		domain_S_prev_keys = Q_prev_df[S_prev_keys].drop_duplicates()
-	
-		# Iterating over all possible realization of S_prev
-		for s_prev_key in domain_S_prev_keys.itertuples(index=False):
-			s_prev_key = tuple(s_prev_key)
-			Q_curr[s_prev_key] = 1 # initialization 
-
-			for Vi in S_curr:
-				# Define variables to be summed for each numerator and denominator 
-				summed_variable_numerator = S_prev[S_prev.index(Vi)+1:]
-				summed_variable_denominator = S_prev[S_prev.index(Vi):]
-
-				# Domain of summed_variable
-				domain_summed_variable_numerator = Q_prev_df[summed_variable_numerator].drop_duplicates()
-				domain_summed_variable_denominator = Q_prev_df[summed_variable_denominator].drop_duplicates()
-
-				# Define variables to be fixed for each numerator and denominator 
-				fixed_variable_numerator = sorted( list(set(S_prev_keys) - set(summed_variable_numerator)), key=lambda x: topo_V.index(x))
-				fixed_variable_denominator = sorted( list(set(S_prev_keys) - set(summed_variable_denominator)), key=lambda x: topo_V.index(x))
-				
-				# Initialize numerator and denominator 
-				numerator = 0
-				denominator = 0 
-
-				# Compute Q_curr[(fixed_variable, summed_variable)] += Q_prev[(fixed_variable, summed_variable)]
-				# for numerator 
-				if len(summed_variable_numerator) == 0:
-					numerator = Q_prev_df[(Q_prev_df[S_prev_keys] == s_prev_key).all(axis=1)]['probability'].values[0]
-				else:
-					for summed_value_numerator in domain_summed_variable_numerator.itertuples(index=False):
-						summed_value_numerator = tuple(summed_value_numerator)
-						mask_summed = (Q_prev_df[summed_variable_numerator] == summed_value_numerator).all(axis=1)
-
-						fixed_value_numerator = tuple([s_prev_key[S_prev_keys.index(Vi)] for Vi in fixed_variable_numerator])
-						mask_fixed = (Q_prev_df[fixed_variable_numerator] == fixed_value_numerator).all(axis=1)
-
-						numerator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
-
-				# for denominator  
-				if len(fixed_variable_denominator) == 0:
-					denominator = 1
-				else:
-					for summed_value_denominator in domain_summed_variable_denominator.itertuples(index=False):
-						summed_value_denominator = tuple(summed_value_denominator)
-						mask_summed = (Q_prev_df[summed_variable_denominator] == summed_value_denominator).all(axis=1)
-
-						fixed_value_denominator = tuple([s_prev_key[S_prev_keys.index(Vi)] for Vi in fixed_variable_denominator])
-						mask_fixed = (Q_prev_df[fixed_variable_denominator] == fixed_value_denominator).all(axis=1)
-
-						denominator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
-
-				Qi = numerator / denominator
-				Q_curr[s_prev_key] *= Qi
-
-		return Q_curr
-
-	def compute_Sigma_operation(Q_prev_df, S_curr, S_prev):
-		"""
-		Computes Q_curr using Q_prev, where Q_prev -delta-> Q_curr
-
-		Parameters:
-		- Q_prev: dict
-			A dictionary where the keys are tuples representing all possible values of S_prev, 
-			and the values are the corresponding probabilities.
-		- S_curr: list
-			A list of variable names representing the subset of S_prev for which we want to compute Q[Si].
-		- S_prev: list
-			A list of variable names representing the superset that includes all variables in Si.
-
-		Returns:
-		- Q_curr: dict
-			A dictionary where the keys are tuples representing all possible values of Si, 
-			and the values are the computed probabilities Q[Si].
-		"""
-
-		# Variables in Q_prev_df
-		S_prev_keys = sorted( list(set(Q_prev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
-		
-		# Variables to be summed
-		S_summed = sorted(list(set(S_prev) - set(S_curr)), key=lambda x: S_prev_keys.index(x))
-
-		if len(S_summed) == 0:
-			return Q_prev_df 
-
-		# Key variables after marginalization  
-		S_diff = sorted(list(set(S_prev_keys) - set(S_summed)), key=lambda x: S_prev_keys.index(x))
-
-		# Initialization 
-		Q_diff = {}
-
-		# Domain of S_diff 
-		if len(S_diff) > 1:
-			domain_S_diff = Q_prev_df[S_diff].drop_duplicates()
-		else:
-			domain_S_diff = set(np.unique(Q_prev_df[S_summed]))
-		
-		if len(S_summed) > 1:
-			domain_S_summed = Q_prev_df[S_summed].drop_duplicates()
-		else:
-			domain_S_summed = set(np.unique(Q_prev_df[S_summed]))
-
-		# Iterating over all possible realization of S_prev
-		for s_diff in domain_S_diff[S_diff[0]] if len(S_diff) == 1 else domain_S_diff.itertuples(index=False):
-			if len(S_diff) > 1:
-				s_diff = tuple(s_diff)
-			Q_diff[s_diff] = 0 # initialization 
-			for s_summed in domain_S_summed:
-				mask_summed = (Q_prev_df[S_summed] == s_summed).all(axis=1)
-				mask_diff = (Q_prev_df[S_diff] == s_diff).all(axis=1)
-				Q_diff[s_diff] += Q_prev_df[(mask_summed) & (mask_diff)]['probability'].values[0]
-
-		return Q_diff
-
-
-	def convert_to_dataframe(data, variable_names, estimator_header=False):
-		"""
-		Converts a nested dictionary of estimators and variable combinations to a pandas DataFrame.
-
-		Parameters:
-		- data: dict
-			A dictionary where:
-			- If estimator_header is True: The top-level keys are estimator names, and values are dictionaries
-			  mapping tuples of variable values to numerical results.
-			- If estimator_header is False: A dictionary where keys are tuples of variable values
-			  and values are numerical results.
-		- variable_names: list
-			A list of strings representing the variable names (e.g., ['X', 'Z', 'Y']).
-		- estimator_header: bool (default False)
-			If True, includes an 'Estimator' column in the DataFrame.
-
-		Returns:
-		- pd.DataFrame
-			A DataFrame where each row corresponds to a combination of variable values (and estimators if applicable).
-		"""
-
-		# Check for the right length of variable names in the second-level keys
-		if estimator_header:
-			for estimator, results in data.items():
-				for key in results.keys():
-					if len(key) != len(variable_names):
-						raise ValueError(f"Key {key} does not match the length of variable names {variable_names}")
-		else:
-			for key in data.keys():
-				if len(key) != len(variable_names):
-					raise ValueError(f"Key {key} does not match the length of variable names {variable_names}")
-
-		# Convert the nested dictionary to a list of dictionaries for easy DataFrame creation
-		if estimator_header:
-			data_list = [
-				{**dict(zip(variable_names, variables)), 'estimator': estimator, 'probability': value}
-				for estimator, results in data.items()
-				for variables, value in results.items()
-			]
-		else:
-			# Create a list of dictionaries where each entry has variable names and the probability
-			data_list = [{**dict(zip(variable_names, key)), 'probability': value} for key, value in data.items()]
-
-		# Create the DataFrame
-		df = pd.DataFrame(data_list)
-
-		return df
-
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -460,13 +514,13 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 						if operator_Scurr == 'δ':
 							Q_Scurr = {}
 							for estimator in list_estimators:
-								Q_Scurr[estimator] = compute_delta_operation(Q_Sprev_df[Q_Sprev_df['estimator'] == estimator], S_curr, S_prev)
+								Q_Scurr[estimator] = compute_delta_operation(G, Q_Sprev_df[Q_Sprev_df['estimator'] == estimator], S_curr, S_prev)
 							keys_Q_Sprev_df = sorted( list(set(Q_Sprev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
 							Q_Scurr_df = convert_to_dataframe(Q_Scurr, keys_Q_Sprev_df, estimator_header = True) 
 
 						elif operator_Scurr == 'Σ':
 							for estimator in list_estimators:
-								Q_Scurr[estimator] = compute_Sigma_operation(Q_Sprev_df[Q_Sprev_df['estimator'] == estimator], S_curr, S_prev)
+								Q_Scurr[estimator] = compute_Sigma_operation(G, Q_Sprev_df[Q_Sprev_df['estimator'] == estimator], S_curr, S_prev)
 							keys_Q_Sprev_df = sorted( list(set(Q_Sprev_df.keys()) - set(['estimator']) - set(['probability'])), key=lambda x: topo_V.index(x))
 							keys_Q_Scurr_df = sorted( list(set(keys_Q_Sprev_df) - (set(S_prev) - set(S_curr))), key=lambda x: topo_V.index(x))
 							Q_Scurr_df = convert_to_dataframe(Q_Scurr, keys_Q_Scurr_df, estimator_header = True) 
@@ -774,26 +828,28 @@ if __name__ == "__main__":
 	np.random.seed(seednum)
 	random.seed(seednum)
 
-	# scm, X, Y = random_generator.Random_SCM_Generator(
-	# 	num_observables=7, num_unobservables=4, num_treatments=2, num_outcomes=1,
-	# 	condition_ID=True, 
-	# 	condition_BD=False, 
-	# 	condition_mSBD=False, 
-	# 	condition_FD=False, 
-	# 	condition_Tian=False, 
-	# 	condition_gTian=False,
-	# 	condition_product = False, 
-	# 	discrete = True, 
-	# 	seednum = seednum 
-	# )
+	scm, X, Y = random_generator.Random_SCM_Generator(
+		num_observables=7, num_unobservables=4, num_treatments=2, num_outcomes=1,
+		condition_ID=True, 
+		condition_BD=False, 
+		condition_mSBD=False, 
+		condition_FD=False, 
+		condition_Tian=False, 
+		condition_gTian=False,
+		condition_product = False, 
+		discrete = True, 
+		seednum = seednum 
+	)
 
-	scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
+	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Double_Napkin_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.Napkin_FD_v2_SCM(seednum = seednum)
 
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
@@ -809,7 +865,8 @@ if __name__ == "__main__":
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 	satisfied_product = tian.check_product_criterion(G, X, Y)
 
-	print(identify.causal_identification(G, X, Y, True))
+	print(discreteness_checker(G, X, Y, obs_data))
+	print(identify.causal_identification(G, X, Y, True, True))
 	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
 
 	y_val = np.ones(len(Y)).astype(int)

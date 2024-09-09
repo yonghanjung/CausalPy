@@ -93,13 +93,6 @@ def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_
 		lower_CI[estimator] = {}
 		upper_CI[estimator] = {}
 
-	# for estimator in list_estimators:
-	# 	for _, x_val in X_values_combinations.iterrows():
-	# 		ATE[estimator][tuple(x_val)] = 0
-	# 		VAR[estimator][tuple(x_val)] = 0
-	# 		lower_CI[estimator][tuple(x_val)] = 0
-	# 		upper_CI[estimator][tuple(x_val)] = 0
-
 	all_Z = []
 	for each_Z_list in list(tuple(dict_Z.values())):
 		all_Z += each_Z_list
