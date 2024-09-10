@@ -20,7 +20,7 @@ from scipy.stats import norm
 import osqp
 from scipy import sparse
 
-def ground_truth(scm, obs_data, X, Y, yval):
+def ground_truth(scm, X, Y, yval):
 	def randomized_equation(**args):
 		num_samples = args.pop('num_sample')
 		return np.random.binomial(1, 0.5, num_samples)

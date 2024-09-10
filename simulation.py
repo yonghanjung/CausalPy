@@ -5,75 +5,84 @@ import pandas as pd
 from sklearn.model_selection import KFold
 import random
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import pickle
+from contextlib import contextmanager
 
 import graph
 import adjustment    
 import example_SCM
-import estimation
+import est_mSBD
+import statmodules
+# from est_mSBD import xgb_predict
+# from statmodules import entropy_balancing_osqp
+import est_general 
 
-def compute_truth(Data_cf,X,Y):
-	groupped = np.array( Data_cf.groupby(X)[Y].mean().reset_index() )
-	x_combination = groupped[:,:len(X)].astype(int)
-	groupped_val = np.prod( np.array( Data_cf.groupby(X)[Y].mean().reset_index() )[:,len(X):], axis=1)
-	result = np.column_stack((x_combination, groupped_val))
-	return result
 
-def performance_comparison(dict_truth, dict_obs):
-	performance = 0
-	for key in dict_obs.keys():
-		performance += np.abs(dict_truth[key] - dict_obs[key])
-	return performance / len(dict_obs.keys())
+# Context manager to simulate scenarios
+@contextmanager
+def simulate_scenario(scenario):
+	original_xgb_predict = est_mSBD.xgb_predict
+	original_entropy_balancing_osqp = statmodules.entropy_balancing_osqp
+	
+	if scenario == 2: 
+		# Modify the train_ML_model to add noise
+		def noisy_predict(model, data, col_feature):
+			pred = original_xgb_predict(model, data, col_feature)
+			noise_mean = data.shape[0] ** (-1/4)
+			noise_scale = data.shape[0] ** (-1/4)
+			return pred + np.random.normal(loc = noise_mean, scale = noise_scale, size = len(data))
 
-def performance_comparison(truth_mat, obs_mat, X):
-	return np.mean( np.abs( truth_mat[:,len(X)] - obs_mat[:,len(X)] )  )
+		def noisy_EB(obs, x_val, X, Z, col_feature_1, col_feature_2):
+			pred = original_entropy_balancing_osqp(obs, x_val, X, Z, col_feature_1, col_feature_2)
+			noise_mean = obs.shape[0] ** (-1/4)
+			noise_scale = obs.shape[0] ** (-1/4)
+			return pred + np.random.normal(loc = noise_mean, scale = noise_scale, size = len(obs))
 
-def DML_scenario(scenario):
-	if scenario == 1: 
-		add_noise = False
-		OM_misspecification = False
-		PW_misspecification = False
-	elif scenario == 2:
-		add_noise = True
-		OM_misspecification = False
-		PW_misspecification = False
-	elif scenario == 3:
-		add_noise = False
-		OM_misspecification = True
-		PW_misspecification = False
-	elif scenario == 4:
-		add_noise = False
-		OM_misspecification = False
-		PW_misspecification = True
-	return add_noise, OM_misspecification, PW_misspecification
+		est_mSBD.xgb_predict = noisy_predict
+		statmodules.entropy_balancing_osqp = noisy_EB
 
-def individual_simulation():
-	# sim_DGP = example_SCM.BD_SCM
-	# sim_instance = estimation.DML_BD
+		yield 
 
-	# sim_DGP = example_SCM.Napkin_SCM
-	# sim_instance = estimation.DML_Napkin
+		est_mSBD.xgb_predict = original_xgb_predict
+		statmodules.entropy_balancing_osqp = original_entropy_balancing_osqp
 
-	sim_DGP = example_SCM.mSBD_SCM
-	sim_instance = estimation.DML_mSBD
-	return sim_DGP,sim_instance
 
-def run_DML_simulation(num_simulation, list_num_samples, scenario, fixed_seed, pkl_path, *args):
-	''' parameters in *args
-	X = X, Y = Y, L=L, clip_PW = False, filename 
-	'''
-	if args: 
-		[X, Y, L, clip_PW, filename] = args[0]
+	elif scenario == 3: 
+		def contimated_predict(model, data, col_feature):
+			random_data = pd.DataFrame(np.random.rand(data.shape[0], data.shape[1]), columns=data.columns)
+			return original_xgb_predict(model, random_data, col_feature)
 
-	add_noise, OM_misspecification, PW_misspecification = DML_scenario(scenario)
-	sim_DGP, sim_instance = individual_simulation()
+		est_mSBD.xgb_predict = contimated_predict
 
-	random.seed(fixed_seed)
-	np.random.seed(fixed_seed)
+		yield 
 
-	list_seeds = list(np.random.randint(1,100000,size=num_simulation))
-	[_, G, _, Data_cf] = sim_DGP(100, generate_submodel = True, seed = fixed_seed)
+		est_mSBD.xgb_predict = original_xgb_predict
+
+	elif scenario == 4: 
+		def contimated_balancing(obs, x_val, X, Z, col_feature_1, col_feature_2): 
+			random_data = np.random.rand(len(obs))
+			return np.clip(random_data, a_min=0, a_max = None)
+
+		statmodules.entropy_balancing_osqp = contimated_balㅇncing
+
+		yield 
+
+		statmodules.entropy_balancing_osqp = original_entropy_balancing_osqp
+
+def run_DML_simulation(simulation_round, list_num_samples, scenario, seednum, pkl_path, scm, X, Y, filename):
+	random.seed(seednum)
+	np.random.seed(seednum)
+
+	list_seeds = list(np.random.randint(1,100000,size=simulation_round))
+	
+	G = scm.graph
+	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
+	topo_V = graph.find_topological_order(G)
+
+	y_val = np.ones(len(Y)).astype(int)
+	truth = statmodules.ground_truth(scm, X, Y, y_val)
+
+	obs_data = scm.generate_samples(1000, seed=seednum)[topo_V]
 
 	truth_mat = compute_truth(Data_cf,X,Y)
 
@@ -168,33 +177,14 @@ def draw_plots(performance_dict, fig_path = None, *args):
 	plt.show()
 
 if __name__ == "__main__":
-	num_simulation = 20
-	list_num_samples = [500, 10000, 25000, 50000]
-	scenario = 4
-	fixed_seed = 240212
-	 
-	X = ['X1','X2']
-	Y = ['Y1','Y2']
-	L = 2 
-	clip_PW = False
-	pkl_path = "pkl/"
-	filename = f"240212-1415-scenario-{scenario}-DMLmSBD"
+	with simulate_scenario(4):
+		ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data)
+		performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
+		
+		print(f"Performance")
+		print(performance_table)
+		print(f"Rank Correlation")
+		print(rank_correlation_table)
 
-	other_params = [X, Y, L, clip_PW, filename]
-	# X = X, Y = Y, L=L, clip_PW = False, filename 
-	performance_dict = run_DML_simulation(num_simulation, list_num_samples, scenario, fixed_seed, pkl_path, other_params)
-
-	# [figsize, custom_xticks, custom_yticks, filename]
-	fig_path = "plot/"
-	fig_params = [(8,10), True, [0.05, 0.15, 0.20, 0.25], (0,0.25), filename]
-	draw_plots(performance_dict, fig_path, fig_params)	
-
-	# loading
-	# scenario = 4
-	# filename = f"240209-2100-scenario-{scenario}-DMLNapkin"
-	# performance_dict = loaded_result("pkl/", "result_" + filename + ".pkl")
-	# fig_path = "plot/"
-	# fig_params = [(8,8), True, [0.025, 0.05, 0.075, 0.1], (0,0.1), filename]
-	# draw_plots(performance_dict, fig_path, fig_params)
 
 

@@ -20,6 +20,7 @@ import frontdoor
 import mSBD
 import tian
 import statmodules
+from statmodules import entropy_balancing_osqp
 
 # Turn off alarms
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -27,6 +28,9 @@ warnings.filterwarnings("ignore", message="Values in x were outside bounds durin
 
 # Suppress all UserWarning messages globally from the osqp package
 warnings.filterwarnings("ignore", category=UserWarning, module='osqp')
+
+def xgb_predict(model, data, col_feature):
+	return model.predict(xgb.DMatrix(data[col_feature]))
 
 def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False): 
 	"""
@@ -142,7 +146,8 @@ def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_
 					
 					# Train model for the current layer
 					mu_models[i] = statmodules.learn_mu(obs_train, col_feature, col_label, params=None)
-					mu_eval_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test[col_feature]))
+					mu_eval_test_dict[i] = xgb_predict(mu_models[i], obs_test, col_feature)
+					# mu_eval_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test[col_feature]))
 					for j in range(i):
 						key_j = f'IyY_{j}'
 						if key_j not in obs_data_y: 
@@ -157,7 +162,8 @@ def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_
 					obs_train_x = copy.copy(obs_train)
 					obs_train_x[dict_X[f'X{i}'][0]] = xval[X.index(dict_X[f'X{i}'][0])]
 
-					check_mu_train_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_train_x[col_feature]))
+					check_mu_train_dict[i] = xgb_predict(mu_models[i], obs_train_x, col_feature)
+					# check_mu_train_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_train_x[col_feature]))
 					for j in range(i):
 						key_j = f'IyY_{j}'
 						if key_j not in obs_data_y: 
@@ -166,7 +172,8 @@ def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_
 							check_mu_train_dict[i] *= obs_train[key_j]
 					obs_train.loc[:, f'check_mu_{i}'] = check_mu_train_dict[i]
 
-					check_mu_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test_x[col_feature]))
+					check_mu_test_dict[i] = xgb_predict(mu_models[i], obs_test_x, col_feature)
+					# check_mu_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test_x[col_feature]))
 					for j in range(i):
 						key_j = f'IyY_{j}'
 						if key_j not in obs_data_y: 
@@ -184,7 +191,7 @@ def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_
 							pi_XZ = IxiX/P_X1
 
 						else:
-							pi_XZ = statmodules.entropy_balancing_osqp(obs = obs_test, 
+							pi_XZ = entropy_balancing_osqp(obs = obs_test, 
 																	x_val = xval[X.index(dict_X[f'X{i}'][0])], 
 																	X = dict_X[f'X{i}'], 
 																	Z = list(set(col_feature) - set(dict_X[f'X{i}'])), 
@@ -351,7 +358,8 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, seed
 				
 				# Train model for the current layer
 				mu_models[i] = statmodules.learn_mu(obs_train, col_feature, col_label, params=None)
-				mu_eval_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test[col_feature]))
+				mu_eval_test_dict[i] = xgb_predict(mu_models[i], obs_test, col_feature)
+				# mu_eval_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test[col_feature]))
 				for j in range(i):
 					key_j = f'IyY_{j}'
 					if key_j not in obs_data_y: 
@@ -366,7 +374,8 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, seed
 				obs_train_x = copy.copy(obs_train)
 				obs_train_x[dict_X[f'X{i}'][0]] = xval[X.index(dict_X[f'X{i}'][0])]
 
-				check_mu_train_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_train_x[col_feature]))
+				check_mu_train_dict[i] = xgb_predict(mu_models[i], obs_train_x, col_feature)
+				# check_mu_train_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_train_x[col_feature]))
 				for j in range(i):
 					key_j = f'IyY_{j}'
 					if key_j not in obs_data_y: 
@@ -375,7 +384,8 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, seed
 						check_mu_train_dict[i] *= obs_train[key_j]
 				obs_train.loc[:, f'check_mu_{i}'] = check_mu_train_dict[i]
 
-				check_mu_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test_x[col_feature]))
+				check_mu_test_dict[i] = xgb_predict(mu_models[i], obs_test_x, col_feature)
+				# check_mu_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test_x[col_feature]))
 				for j in range(i):
 					key_j = f'IyY_{j}'
 					if key_j not in obs_data_y: 
@@ -639,7 +649,7 @@ if __name__ == "__main__":
 	truth = statmodules.ground_truth(scm, obs_data, X, Y, y_val)
 
 	start_time = time.process_time()
-	ATE, VAR, lower_CI, upper_CI = estimate_SBD_osqp(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False)
+	ATE, VAR, lower_CI, upper_CI = estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False)
 	end_time = time.process_time()
 	print(f'Time with OSQP minimizer: {end_time - start_time}')
 

@@ -564,7 +564,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 
 	return ATE
 
-def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False):
+def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -625,7 +625,7 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False):
 
 	return ATE
 
-def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False):
+def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -723,7 +723,7 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False):
 
 	return ATE
 
-def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False):
+def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -822,28 +822,27 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
 	seednum = int(time.time())
-	# seednum = 1725645528
 
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
 	random.seed(seednum)
 
-	scm, X, Y = random_generator.Random_SCM_Generator(
-		num_observables=7, num_unobservables=4, num_treatments=2, num_outcomes=1,
-		condition_ID=True, 
-		condition_BD=False, 
-		condition_mSBD=False, 
-		condition_FD=False, 
-		condition_Tian=False, 
-		condition_gTian=False,
-		condition_product = False, 
-		discrete = True, 
-		seednum = seednum 
-	)
+	# scm, X, Y = random_generator.Random_SCM_Generator(
+	# 	num_observables=7, num_unobservables=4, num_treatments=2, num_outcomes=1,
+	# 	condition_ID=True, 
+	# 	condition_BD=False, 
+	# 	condition_mSBD=False, 
+	# 	condition_FD=False, 
+	# 	condition_Tian=False, 
+	# 	condition_gTian=False,
+	# 	condition_product = False, 
+	# 	discrete = True, 
+	# 	seednum = seednum 
+	# )
 
 	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
-	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
+	scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
@@ -855,7 +854,7 @@ if __name__ == "__main__":
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
 
-	obs_data = scm.generate_samples(5000, seed=seednum)[topo_V]
+	obs_data = scm.generate_samples(1000, seed=seednum)[topo_V]
 
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
