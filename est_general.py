@@ -822,6 +822,7 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
 	seednum = int(time.time())
+	# seednum = 1726001329
 
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
@@ -842,8 +843,8 @@ if __name__ == "__main__":
 
 	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
-	scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
-	# scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
+	scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
@@ -854,7 +855,7 @@ if __name__ == "__main__":
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
 
-	obs_data = scm.generate_samples(1000, seed=seednum)[topo_V]
+	obs_data = scm.generate_samples(10, seed=seednum)[topo_V]
 
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
@@ -869,11 +870,11 @@ if __name__ == "__main__":
 	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
 
 	y_val = np.ones(len(Y)).astype(int)
-	truth = statmodules.ground_truth(scm, obs_data, X, Y, y_val)
+	truth = statmodules.ground_truth(scm, X, Y, y_val)
 
 	ATE = estimate_case_by_case(G, X, Y, y_val, obs_data)
 
-	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
+	performance_table, rank_correlation_table, performance_dict, rank_correlation_dict = statmodules.compute_performance(truth, ATE)
 	print("Performance")
 	print(performance_table)
 	print("Rank Correlation")

@@ -85,51 +85,53 @@ def entropy_balancing_booster_osqp(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', co
 	return W_project * IxX
 
 def entropy_balancing_osqp(obs, x_val, X, Z, col_feature_1='mu_xZ', col_feature_2='mu_XZ'):
-    # Get data
-    IxX = np.array((obs[X] == x_val).prod(axis=1))
-    n = len(obs)
-    mu_xZ = obs[col_feature_1].values
-    mu_XZ = obs[col_feature_2].values
-    
-    # Objective function setup (regularized quadratic form)
-    P = sparse.diags([1.0] * n)  # Identity matrix for W^T W (regularization term)
-    q = np.zeros(n)  # Linear term for the objective
-    
-    # Constraints
-    # Constraint 1: \sum W_i * IxX = n
-    A1 = sparse.csr_matrix(IxX.reshape(1, -1))  # Reshape into a 2D sparse matrix
-    l1 = np.array([n])       # Lower bound (equality, so l1 == u1)
-    u1 = np.array([n])       # Upper bound
-    
-    # Constraint 2: \sum W_i * IxX * f(C_i) = \sum f(C_i)
-    Cval1 = mu_XZ  # f(C_i)
-    Cval2 = mu_xZ
-    A2 = sparse.csr_matrix((IxX * Cval1).reshape(1, -1))  # Reshape into a 2D sparse matrix
-    l2 = np.array([np.sum(Cval2)])     # Lower bound (equality, so l2 == u2)
-    u2 = np.array([np.sum(Cval2)])     # Upper bound
-    
-    # Combine the constraints
-    A = sparse.vstack([A1, A2])  # Stack both constraint matrices vertically
-    l = np.hstack([l1, l2])      # Stack lower bounds
-    u = np.hstack([u1, u2])      # Stack upper bounds
-    
-    # Bounds for the decision variable W (W_i >= 1e-5)
-    W_lower_bound = 1e-5 * np.ones(n)
-    W_upper_bound = np.inf * np.ones(n)
-    
-    # OSQP solver setup
-    prob = osqp.OSQP()
-    prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False)
-    
-    # Solve the problem
-    res = prob.solve()
+	# Get data
+	IxX = np.array((obs[X] == x_val).prod(axis=1))
+	n = len(obs)
+	mu_xZ = obs[col_feature_1].values
+	mu_XZ = obs[col_feature_2].values
+	
+	# Objective function setup (regularized quadratic form)
+	P = sparse.diags([1.0] * n)  # Identity matrix for W^T W (regularization term)
+	q = np.zeros(n)  # Linear term for the objective
+	
+	# Constraints
+	# Constraint 1: \sum W_i * IxX = n
+	A1 = sparse.csr_matrix(IxX.reshape(1, -1))  # Reshape into a 2D sparse matrix
+	l1 = np.array([n])       # Lower bound (equality, so l1 == u1)
+	u1 = np.array([n])       # Upper bound
+	
+	# Constraint 2: \sum W_i * IxX * f(C_i) = \sum f(C_i)
+	Cval1 = mu_XZ  # f(C_i)
+	Cval2 = mu_xZ
+	A2 = sparse.csr_matrix((IxX * Cval1).reshape(1, -1))  # Reshape into a 2D sparse matrix
+	l2 = np.array([np.sum(Cval2)])     # Lower bound (equality, so l2 == u2)
+	u2 = np.array([np.sum(Cval2)])     # Upper bound
+	
+	# Combine the constraints
+	A = sparse.vstack([A1, A2])  # Stack both constraint matrices vertically
+	l = np.hstack([l1, l2])      # Stack lower bounds
+	u = np.hstack([u1, u2])      # Stack upper bounds
+	
+	# Bounds for the decision variable W (W_i >= 1e-5)
+	W_lower_bound = 1e-5 * np.ones(n)
+	W_upper_bound = np.inf * np.ones(n)
+	
+	# OSQP solver setup
+	prob = osqp.OSQP()
+	prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False)
+	
+	# Solve the problem
+	res = prob.solve()
 
-    # Extract optimal W values
-    W_opt = res.x
+	# Extract optimal W values
+	W_opt = res.x
 
-    return W_opt
+	# Check the status of the solution
+	if res.info.status != 'solved' or W_opt is None or np.isnan(W_opt).any():
+		W_opt = entropy_balancing(obs, x_val, X, Z, col_feature_1, col_feature_2)
 
-
+	return W_opt
 
 
 def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=10, batch_size=100):
@@ -372,4 +374,4 @@ def compute_performance(truth, ATE):
 	rank_correlation_table_header = ["Estimator", "Rank Correlation", "P-value"]
 	rank_correlation_table = tabulate(rank_correlation_table_data, tablefmt='grid', floatfmt=".3f", headers = rank_correlation_table_header)
 
-	return performance_table, rank_correlation_table
+	return performance_table, rank_correlation_table, performance, rank_correlation_pvalue

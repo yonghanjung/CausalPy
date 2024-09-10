@@ -20,7 +20,6 @@ import frontdoor
 import mSBD
 import tian
 import statmodules
-from statmodules import entropy_balancing_osqp
 
 # Turn off alarms
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -191,7 +190,7 @@ def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_
 							pi_XZ = IxiX/P_X1
 
 						else:
-							pi_XZ = entropy_balancing_osqp(obs = obs_test, 
+							pi_XZ = statmodules.entropy_balancing_osqp(obs = obs_test, 
 																	x_val = xval[X.index(dict_X[f'X{i}'][0])], 
 																	X = dict_X[f'X{i}'], 
 																	Z = list(set(col_feature) - set(dict_X[f'X{i}'])), 

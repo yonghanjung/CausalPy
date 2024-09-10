@@ -2,3 +2,5 @@ CausalPy/*
 archived/*
 *.pyc
 .DS_Store
+*.pkl
+*.png
