@@ -31,6 +31,97 @@ warnings.filterwarnings("ignore", category=UserWarning, module='osqp')
 def xgb_predict(model, data, col_feature):
 	return model.predict(xgb.DMatrix(data[col_feature]))
 
+def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False):
+	np.random.seed(int(seednum))
+	random.seed(int(seednum))
+
+	topo_V = graph.find_topological_order(G)
+	Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
+
+	z_score = norm.ppf(1 - alpha_CI / 2)
+
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+
+	ATE = {}
+	VAR = {}
+	lower_CI = {}
+	upper_CI = {}
+
+	for estimator in list_estimators:
+		ATE[estimator] = {}
+		VAR[estimator] = {}
+		lower_CI[estimator] = {}
+		upper_CI[estimator] = {}
+
+
+	# Compute causal effect estimations
+	if not Z:
+		for estimator in list_estimators:
+			for _, x_val in X_values_combinations.iterrows():
+				mask = (obs_data[X] == x_val.values).all(axis=1)
+				ATE[estimator][tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
+				VAR[estimator][tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
+	else:
+		L = 2
+		kf = KFold(n_splits=L, shuffle=True)
+		col_feature = list(set(Z + X))
+		col_label = Y
+
+		for train_index, test_index in kf.split(obs_data):
+			obs_train, obs_test = obs_data.iloc[train_index], obs_data.iloc[test_index]
+			nuisance_mu = statmodules.learn_mu(obs_train, col_feature, col_label, params=None)
+			mu_XZ = xgb_predict(nuisance_mu, obs_test, col_feature)
+
+			for _, x_val in X_values_combinations.iterrows():
+				obs_test_x = copy.copy(obs_test)
+				obs_test_x[X] = x_val.values
+				mu_xZ = xgb_predict(nuisance_mu, obs_test_x, col_feature)
+				obs_test.loc[:, 'mu_xZ'] = mu_xZ
+				obs_test.loc[:, 'mu_XZ'] = mu_XZ
+				if only_OM: 
+					OM_est = np.mean(mu_xZ) 
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_est
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['mu_xZ'] - OM_est) ** 2 )
+
+				else:
+					pi_XZ = statmodules.entropy_balancing_osqp(obs = obs_test, 
+															x_val = x_val.values, 
+															X = X, 
+															Z = Z, 
+															col_feature_1 = 'mu_xZ', 
+															col_feature_2 = 'mu_XZ')
+
+					OM_est = np.mean(mu_xZ) 
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_est
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['mu_xZ'] - OM_est) ** 2 )
+
+					Yvec = (obs_test[Y].values.flatten())
+					PW_est = np.mean(pi_XZ * Yvec)
+					ATE["IPW"][tuple(x_val)] = ATE["IPW"].get(tuple(x_val), 0) + PW_est
+					VAR["IPW"][tuple(x_val)] = VAR["IPW"].get(tuple(x_val), 0) + np.mean( (pi_XZ * Yvec - PW_est) ** 2 )
+
+					# AIPW_est = OM_est + PW_est - np.mean( pi_XZ * mu_XZ )
+					AIPW_pseudo_outcome = mu_xZ + pi_XZ * (Yvec - mu_XZ)
+					AIPW_est = np.mean( AIPW_pseudo_outcome )
+					ATE["DML"][tuple(x_val)] = ATE["DML"].get(tuple(x_val), 0) + AIPW_est
+					VAR["DML"][tuple(x_val)] = VAR["DML"].get(tuple(x_val), 0) + np.mean( (AIPW_pseudo_outcome - AIPW_est) ** 2 )
+
+		for _, x_val in X_values_combinations.iterrows():
+			for estimator in list_estimators:
+				ATE[estimator][tuple(x_val)] /= L
+				VAR[estimator][tuple(x_val)] /= L
+
+	for _, x_val in X_values_combinations.iterrows():
+		for estimator in list_estimators:
+			mean_ATE_x = ATE[estimator][tuple(x_val)]
+			lower_x = (mean_ATE_x - z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			upper_x = (mean_ATE_x + z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			lower_CI[estimator][tuple(x_val)] = lower_x
+			upper_CI[estimator][tuple(x_val)] = upper_x
+
+	return ATE, VAR, lower_CI, upper_CI
+
 def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False): 
 	"""
 	Estimate causal effects using the mSBD method.

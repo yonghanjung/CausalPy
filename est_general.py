@@ -147,7 +147,10 @@ def compute_delta_operation(G, Q_prev_df, S_curr, S_prev):
 					fixed_value_numerator = tuple([s_prev_key[S_prev_keys.index(Vi)] for Vi in fixed_variable_numerator])
 					mask_fixed = (Q_prev_df[fixed_variable_numerator] == fixed_value_numerator).all(axis=1)
 
-					numerator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
+					if (mask_summed & mask_fixed).any():
+						numerator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
+					else:
+						continue 
 
 			# for denominator  
 			if len(fixed_variable_denominator) == 0:
@@ -160,9 +163,15 @@ def compute_delta_operation(G, Q_prev_df, S_curr, S_prev):
 					fixed_value_denominator = tuple([s_prev_key[S_prev_keys.index(Vi)] for Vi in fixed_variable_denominator])
 					mask_fixed = (Q_prev_df[fixed_variable_denominator] == fixed_value_denominator).all(axis=1)
 
-					denominator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
+					if (mask_summed & mask_fixed).any():
+						denominator += Q_prev_df[(mask_summed) & (mask_fixed)]['probability'].values[0]
+					else:
+						continue 
 
-			Qi = numerator / denominator
+			if denominator != 0:
+				Qi = numerator / denominator
+			else:
+				Qi = numerator
 			Q_curr[s_prev_key] *= Qi
 
 	return Q_curr
@@ -222,7 +231,11 @@ def compute_Sigma_operation(G, Q_prev_df, S_curr, S_prev):
 		for s_summed in domain_S_summed:
 			mask_summed = (Q_prev_df[S_summed] == s_summed).all(axis=1)
 			mask_diff = (Q_prev_df[S_diff] == s_diff).all(axis=1)
-			Q_diff[s_diff] += Q_prev_df[(mask_summed) & (mask_diff)]['probability'].values[0]
+
+			if (mask_summed & mask_diff).any():
+				Q_diff[s_diff] += Q_prev_df[(mask_summed) & (mask_diff)]['probability'].values[0]
+			else:
+				continue 
 
 	return Q_diff
 
@@ -456,15 +469,15 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 					continue
 
 				# Case 2. len(adj_dict_component) == 2 (That is, Di = adj_dict_component[1])
-				elif len(adj_dict_component) == 2: 
-					S0 = adj_dict_component[0]
-					PA_S0 = graph.find_parents(G, S0)
-					Dj = adj_dict_component[1]
+				# elif len(adj_dict_component) == 2: 
+				# 	S0 = adj_dict_component[0]
+				# 	PA_S0 = graph.find_parents(G, S0)
+				# 	Dj = adj_dict_component[1]
 
-					Q_Dj_val = handle_Next_RootA(RootA = S0, PA_RootA = PA_S0, Next_RootA = Dj, Superset_Values = D_minus_Y, X = X, Y = Y, superset_values = d_minus_y, x_val = x_val, y_val = y_val)
-					for estimator in list_estimators:
-						Q_D_val[estimator] *= Q_Dj_val[estimator]
-					continue	
+				# 	Q_Dj_val = handle_Next_RootA(RootA = S0, PA_RootA = PA_S0, Next_RootA = Dj, Superset_Values = D_minus_Y, X = X, Y = Y, superset_values = d_minus_y, x_val = x_val, y_val = y_val)
+				# 	for estimator in list_estimators:
+				# 		Q_D_val[estimator] *= Q_Dj_val[estimator]
+				# 	continue	
 
 				# Case 3. len(adj_dict_component) > 2 (That is, Di = adj_dict_component[1])
 				else:
@@ -782,7 +795,7 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123
 				ATE[estimator][tuple(x_val)] += Q_D_val[estimator]
 	return ATE
 
-def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
+def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, clip_val = True, minval = 0, maxval = 1):
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
 	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
@@ -791,32 +804,38 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 	satisfied_product = tian.check_product_criterion(G, X, Y)
 
-	if satisfied_BD:
-		ATE, _, _, _ = est_BD.estimate_BD(G, X, Y, obs_data, only_OM = False)
-		return ATE 
+	# Function to clip ATE values
+	def clip_ATE(ATE):
+		if clip_val:
+			for estimator in ATE.keys():
+				for x_val in ATE[estimator].keys():
+					ATE[estimator][x_val] = np.clip(ATE[estimator][x_val], minval, maxval)
+		return ATE
+
+	# Handle different cases based on criteria
+	if satisfied_BD: 
+		ATE, _, _, _ = est_mSBD.estimate_BD(G, X, Y, obs_data, only_OM=False)
 
 	elif satisfied_mSBD:
 		if len(Y) == 1:
-			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM = False)
+			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM=False)
 		else:
-			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM = False)
-		return ATE 
+			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM=False)
 
 	elif satisfied_Tian:
-		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False)
-		return ATE 
+		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM=False)
 
 	elif satisfied_product:
-		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False)
-		return ATE 
+		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM=False)
 
 	elif satisfied_gTian:
-		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False)
-		return ATE 
+		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM=False)
 
-	else: 
-		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM = False)
-		return ATE 
+	else:
+		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM=False)
+
+	# Clip ATE values if needed and return
+	return clip_ATE(ATE)
 
 
 if __name__ == "__main__":
@@ -829,14 +848,14 @@ if __name__ == "__main__":
 	random.seed(seednum)
 
 	# scm, X, Y = random_generator.Random_SCM_Generator(
-	# 	num_observables=7, num_unobservables=4, num_treatments=2, num_outcomes=1,
+	# 	num_observables=7, num_unobservables=2, num_treatments=2, num_outcomes=1,
 	# 	condition_ID=True, 
-	# 	condition_BD=False, 
-	# 	condition_mSBD=False, 
+	# 	condition_BD=True, 
+	# 	condition_mSBD=True, 
 	# 	condition_FD=False, 
-	# 	condition_Tian=False, 
-	# 	condition_gTian=False,
-	# 	condition_product = False, 
+	# 	condition_Tian=True, 
+	# 	condition_gTian=True,
+	# 	condition_product = True, 
 	# 	discrete = True, 
 	# 	seednum = seednum 
 	# )
@@ -844,8 +863,8 @@ if __name__ == "__main__":
 	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
-	scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
-	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
+	scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Double_Napkin_SCM(seednum = seednum)
@@ -855,7 +874,7 @@ if __name__ == "__main__":
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
 
-	obs_data = scm.generate_samples(10, seed=seednum)[topo_V]
+	obs_data = scm.generate_samples(1000, seed=seednum)[topo_V]
 
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
