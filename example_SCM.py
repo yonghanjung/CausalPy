@@ -37,6 +37,123 @@ def BD_SCM(seednum = None):
 	Y = ['Y']
 	return [scm, X, Y]
 
+def Kang_Schafer(seednum = None):
+	# I refer the one in https://arxiv.org/pdf/1704.00211 Section 5.1. 
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def equation_Z1(**kwargs):
+		num_samples = kwargs.pop('num_sample')
+		return np.random.normal(0, 1, num_samples)
+
+	def equation_Z2(**kwargs):
+		num_samples = kwargs.pop('num_sample')
+		return np.random.normal(0, 1, num_samples)
+
+	def equation_Z3(**kwargs):
+		num_samples = kwargs.pop('num_sample')
+		return np.random.normal(0, 1, num_samples)
+
+	def equation_Z4(**kwargs):
+		num_samples = kwargs.pop('num_sample')
+		return np.random.normal(0, 1, num_samples)
+
+	def equation_X(Z1, Z2, Z3, Z4, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_X = inv_logit( -Z1 + 0.5 * Z2 - 0.25 * Z3 - 0.1 * Z4  )
+		return np.random.binomial(1, prob_X)
+
+	def equation_Y(Z1, Z2, Z3, Z4, X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		Y = 210 + X*((27.4 * Z1) + (13.7 * Z2) + (13.7 * Z3) + (13.7 * Z4)) + noise 
+		return Y 
+
+	scm = StructuralCausalModel()
+	scm.add_observed_variable('Z1', equation_Z1, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z2', equation_Z2, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z3', equation_Z3, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z4', equation_Z4, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('X', equation_X, ['Z1', 'Z2', 'Z3', 'Z4'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y', equation_Y, ['Z1', 'Z2', 'Z3', 'Z4','X'], stats.norm(0, 0.1))
+
+	X = ['X']
+	Y = ['Y']
+	return [scm, X, Y]
+
+def Dukes_Vansteelandt_Farrel(seednum = None, d=200):
+	# Inference for treatment effect parameters in potentially misspecified high-dimensional models
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def equation_Z(**kwargs):
+		num_samples = kwargs.pop('num_sample')
+		return stats.multivariate_normal.rvs(mean=[0,0], cov=[[1, 0.8], [0.8, 1]], size=num_samples)
+	
+	scm = StructuralCausalModel()
+	scm.add_observed_variable('Z', equation_Z, [], stats.norm(0, 0.1))
+	
+
+def Kang_Schafer_dim(seednum = None, d=4):
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def create_equation_Zi(i):
+		def equation_Zi(**kwargs):
+			num_samples = kwargs.get('num_sample', None)
+			Zi = np.random.normal(0,1,num_samples)
+			return Zi
+		return equation_Zi
+
+	def equation_X(Z_list, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+
+		# coeff = [27.4] + [13.7] * (len(Z_list)-1) 
+		coeff = [(-1)**n * 2**(-n) for n in range(1, d + 1)]
+		X_agg = np.dot(np.array(Z_list).T, coeff)  # Compute dot product
+		prob_X = inv_logit(X_agg)
+		return np.random.binomial(1, prob_X)
+
+	def equation_Y(Z_list, X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+
+		coeff = [27.4] + [13.7] * (len(Z_list) - 1)
+		Y_agg = np.dot(np.array(Z_list).T, coeff)  # Compute dot product
+		Y = 210 + X*Y_agg + noise
+		return Y
+
+	scm = StructuralCausalModel()
+	
+	# Add observed variables Zi using dynamically generated equations
+	Z_list = []
+	for i in range(d):
+		equation_Zi = create_equation_Zi(i)  # Dynamically create equation_Wi
+		Z_name = f'Z{i+1}'
+		scm.add_observed_variable(Z_name, equation_Zi, [], stats.norm(0, 0.1))
+		Z_list.append(Z_name)
+
+		
+	# Modify this line to correctly pass Z_list during SCM computation
+	def equation_X_wrapper(**kwargs):
+		Z_values = [kwargs[f'Z{i+1}'] for i in range(d)]  # Collect all Wi values as W_list
+		return equation_X(Z_values, **kwargs)
+
+	# Modify this line to correctly pass Z_list during SCM computation
+	def equation_Y_wrapper(**kwargs):
+		Z_values = [kwargs[f'Z{i+1}'] for i in range(d)]  # Collect all Wi values as W_list
+		return equation_Y(Z_values, **kwargs)
+
+
+	# scm.add_observed_variable('W', equation_W, ['U_WX', 'U_WY'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X', equation_X_wrapper, Z_list, stats.norm(0, 0.1))
+	scm.add_observed_variable('Y', equation_Y_wrapper, Z_list + ['X'], stats.norm(0, 0.1))
+
+	X = ['X']
+	Y = ['Y']
+	return [scm, X, Y]
+
 
 def mSBD_SCM(seednum = None):
 	if seednum is not None: 

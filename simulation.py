@@ -43,7 +43,8 @@ def simulate_scenario(scenario):
 			pred = original_xgb_predict(model, data, col_feature)
 			noise_mean = data.shape[0] ** (-1/4)
 			noise_scale = data.shape[0] ** (-1/4)
-			return pred + np.random.normal(loc = noise_mean, scale = noise_scale, size = len(data))
+			scale_param = np.max([1.0, np.mean(pred)])
+			return pred + scale_param * np.random.normal(loc = noise_mean, scale = noise_scale, size = len(data))
 
 		def noisy_EB(obs, x_val, X, Z, col_feature_1, col_feature_2):
 			pred = original_entropy_balancing_osqp(obs, x_val, X, Z, col_feature_1, col_feature_2)
@@ -122,7 +123,11 @@ def run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, s
 		for num_sample in list_num_samples:
 			obs_data = scm.generate_samples(num_sample, seed=each_seed)[topo_V]
 			with simulate_scenario(scenario):
-				ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data)
+				if np.max(obs_data[Y]) > 1: 
+					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data,clip_val = False)
+				else:
+					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data)
+				# Else 
 				_, _, performance_dict_per_seed, _ = statmodules.compute_performance(truth, ATE)
 
 				for estimator in list_of_estimators: 
@@ -208,12 +213,17 @@ def draw_plots(performance_dict, **kwargs):
 	plt.show()
 
 
-def call_examples(example_number):
-
+def call_examples(example_number, **kwargs):
+	d = kwargs.get('dim', None)
 	if example_number == 1:
 		# Back-door 
-		scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
-		example_name = 'CanonBD'
+		scm, X, Y = example_SCM.Kang_Schafer_v0(seednum = seednum)	
+		example_name = 'Kang_Schafer'
+
+	elif example_number == 11:
+		# Back-door 		
+		scm, X, Y = example_SCM.Kang_Schafer_dim(seednum = seednum, d=d)	
+		example_name = f'Kang_Schafer_dim{d}'
 
 	elif example_number == 2:
 		# mSBD
@@ -250,10 +260,27 @@ def call_examples(example_number):
 		scm, X, Y = example_SCM.Double_Napkin_SCM(seednum = seednum)
 		example_name = 'CanonDoubleNapkin'
 
-	# elif example_number == 9: 
-	# 	# Nested Napkin
-	# 	scm, X, Y = example_SCM.Double_Napkin_SCM(seednum = seednum)
-	# 	example_name = 'CanonDoubleNapkin'
+	elif example_number == 9: 
+		# Double-FD-Ratio
+		scm, X, Y = example_SCM.Napkin_FD_v2_SCM(seednum = seednum)
+		example_name = 'CanonRatioFD2'
+
+	# elif example_number == 999:
+	# 	# Random
+	# 	list_num_samples = kwargs.pop('list_num_samples', None)
+
+	# 	scm, X, Y = random_generator.Random_SCM_Generator(
+	# 		num_observables=7, num_unobservables=2, num_treatments=2, num_outcomes=1,
+	# 		condition_ID=True, 
+	# 		condition_BD=True, 
+	# 		condition_mSBD=True, 
+	# 		condition_FD=False, 
+	# 		condition_Tian=True, 
+	# 		condition_gTian=True,
+	# 		condition_product = True, 
+	# 		discrete = True, 
+	# 		seednum = seednum 
+	# 	)		
 
 	return scm, X, Y, example_name
 
@@ -264,13 +291,25 @@ if __name__ == "__main__":
 	===== Back-door =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 1 240911 0000 
+	# python3 simulation.py 190702 100 1 1 240930 0000 
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 1 240911 0000 
+	# python3 simulation.py 190702 100 2 1 240930 0000 
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 1 240911 0000 
+	# python3 simulation.py 190702 100 3 1 240930 0000 
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 1 240911 0000 
+	# python3 simulation.py 190702 100 4 1 240930 0000 
+
+	''' 
+	===== Back-door2 =====
+	'''
+	''' scenario 1 '''
+	# python3 simulation.py 190702 100 1 11 240930 0000 10
+	''' scenario 2 '''
+	# python3 simulation.py 190702 100 2 11 240930 0000 10
+	''' scenario 3 '''
+	# python3 simulation.py 190702 100 3 11 240930 0000 10
+	''' scenario 4 '''
+	# python3 simulation.py 190702 100 4 11 240930 0000 10
 
 	''' 
 	===== mSBD =====
@@ -356,22 +395,36 @@ if __name__ == "__main__":
 	''' scenario 4 '''
 	# python3 simulation.py 190702 100 4 8 240917 0000 
 
+
+	''' 
+	===== Ratio FD2 =====
+	'''
+	''' scenario 1 '''
+	# python3 simulation.py 190702 100 1 9 240917 0000 
+	''' scenario 2 '''
+	# python3 simulation.py 190702 100 2 9 240917 0000 
+	''' scenario 3 '''
+	# python3 simulation.py 190702 100 3 9 240917 0000 
+	''' scenario 4 '''
+	# python3 simulation.py 190702 100 4 9 240917 0000 
+
+
 	seednum = int(sys.argv[1])
+	simulation_round = int(sys.argv[2])
+	scenario = int(sys.argv[3])
+	example_number = int(sys.argv[4])
+	sim_date = sys.argv[5]
+	sim_time = sys.argv[6]
+	sim_dim = int(sys.argv[7])
 
 	np.random.seed(seednum)
 	random.seed(seednum)
 
-	simulation_round = int(sys.argv[2])
 	list_num_samples = [100, 20000, 50000, 100000]
 	# list_num_samples = [100, 1000, 10000]
 	list_of_estimators = ['OM', 'IPW', 'DML']
-	scenario = int(sys.argv[3])
-
-	example_number = int(sys.argv[4])
-	scm, X, Y, example_name = call_examples(example_number)
 	
-	sim_date = int(sys.argv[5])
-	sim_time = int(sys.argv[6])
+	scm, X, Y, example_name = call_examples(example_number, dim=sim_dim)
 
 	pkl_path = 'log_experiments/pkl/'
 	fig_path = 'log_experiments/plot/'

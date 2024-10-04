@@ -796,14 +796,6 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123
 	return ATE
 
 def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, clip_val = True, minval = 0, maxval = 1):
-	# Check various criteria
-	satisfied_BD = adjustment.check_admissibility(G, X, Y)
-	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
-	satisfied_FD = frontdoor.constructive_FD(G, X, Y)
-	satisfied_Tian = tian.check_Tian_criterion(G, X)
-	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
-	satisfied_product = tian.check_product_criterion(G, X, Y)
-
 	# Function to clip ATE values
 	def clip_ATE(ATE):
 		if clip_val:
@@ -812,30 +804,39 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 					ATE[estimator][x_val] = np.clip(ATE[estimator][x_val], minval, maxval)
 		return ATE
 
+	# Check various criteria
+	satisfied_BD = adjustment.check_admissibility(G, X, Y)
 	# Handle different cases based on criteria
 	if satisfied_BD: 
 		ATE, _, _, _ = est_mSBD.estimate_BD(G, X, Y, obs_data, only_OM=False)
+		return clip_ATE(ATE)
 
-	elif satisfied_mSBD:
+	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
+	if satisfied_mSBD:
 		if len(Y) == 1:
 			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM=False)
 		else:
 			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM=False)
+		return clip_ATE(ATE)
 
-	elif satisfied_Tian:
+	satisfied_Tian = tian.check_Tian_criterion(G, X)
+	if satisfied_Tian:
 		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM=False)
+		return clip_ATE(ATE)
 
-	elif satisfied_product:
-		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM=False)
-
-	elif satisfied_gTian:
+	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
+	if satisfied_gTian:
 		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM=False)
+		return clip_ATE(ATE)
+
+	satisfied_product = tian.check_product_criterion(G, X, Y)
+	if satisfied_product:
+		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM=False)
+		return clip_ATE(ATE)
 
 	else:
 		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM=False)
-
-	# Clip ATE values if needed and return
-	return clip_ATE(ATE)
+		return clip_ATE(ATE)
 
 
 if __name__ == "__main__":
@@ -864,34 +865,40 @@ if __name__ == "__main__":
 	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
 	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
-	scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Double_Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_v2_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.Kang_Schafer(seednum = seednum)
+	scm, X, Y = example_SCM.Kang_Schafer_dim(seednum = seednum, d = 100)
+	# scm, X, Y = example_SCM.Glynn_Quinn(seednum = seednum, scenario_X = 2, scenario_Y = 0)
+
+	
+	
 
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
 
-	obs_data = scm.generate_samples(1000, seed=seednum)[topo_V]
+	obs_data = scm.generate_samples(10000, seed=seednum)[topo_V]
 
 	# Check various criteria
-	satisfied_BD = adjustment.check_admissibility(G, X, Y)
-	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
-	satisfied_FD = frontdoor.constructive_FD(G, X, Y)
-	satisfied_Tian = tian.check_Tian_criterion(G, X)
-	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
-	satisfied_product = tian.check_product_criterion(G, X, Y)
+	# satisfied_BD = adjustment.check_admissibility(G, X, Y)
+	# satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
+	# satisfied_FD = frontdoor.constructive_FD(G, X, Y)
+	# satisfied_Tian = tian.check_Tian_criterion(G, X)
+	# satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
+	# satisfied_product = tian.check_product_criterion(G, X, Y)
 
-	print(discreteness_checker(G, X, Y, obs_data))
+	# print(discreteness_checker(G, X, Y, obs_data))
 	print(identify.causal_identification(G, X, Y, True, True))
-	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
+	# adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
 
 	y_val = np.ones(len(Y)).astype(int)
 	truth = statmodules.ground_truth(scm, X, Y, y_val)
 
-	ATE = estimate_case_by_case(G, X, Y, y_val, obs_data)
+	ATE = estimate_case_by_case(G, X, Y, y_val, obs_data, clip_val = False)
 
 	performance_table, rank_correlation_table, performance_dict, rank_correlation_dict = statmodules.compute_performance(truth, ATE)
 	print("Performance")
