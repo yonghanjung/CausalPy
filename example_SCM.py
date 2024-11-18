@@ -2,34 +2,39 @@ import random
 import scipy.stats as stats
 import numpy as np
 import pandas as pd
+from scipy.linalg import toeplitz
 
 from SCM import StructuralCausalModel  # Ensure generateSCM.py is in the same directory
 
 def inv_logit(vec):
 	return 1/(1+np.exp(-vec))
 
-def BD_SCM(seednum = None):
+def BD_SCM(seednum = None, d = 10):
 	if seednum is not None: 
 		random.seed(int(seednum))
 		np.random.seed(seednum)
 
-	def equation_C(U_C, noise, **kwargs):
+	def equation_C(noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		return U_C + noise 
+		first_column = [2**(-abs(j - 0) - 1) for j in range(d)]
+		first_row = [2**(-abs(0 - k) - 1) for k in range(d)]
+		toeplitz_matrix = toeplitz(first_column, first_row)
+
+		return stats.multivariate_normal.rvs(mean = np.zeros(d), cov = toeplitz_matrix, size=num_samples)
 
 	def equation_X(C, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_X = inv_logit( 0.3 * C + 1 + noise)
+		prob_X = inv_logit( np.sum(C,axis=1) + 1 + noise)
 		return np.random.binomial(1, prob_X)
 
 	def equation_Y(C, X, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_Y = inv_logit( 2*(2 * X - 1)*C + 0.5 * C + (2*X - 1) + noise )
+		Csum = np.sum(C,axis=1)
+		prob_Y = inv_logit( 2*(2 * X - 1)*Csum + 0.5 * Csum + (2*X - 1) + noise )
 		return np.random.binomial(1, prob_Y)
 
 	scm = StructuralCausalModel()
-	scm.add_unobserved_variable('U_C', stats.norm(0, 1))
-	scm.add_observed_variable('C', equation_C, ['U_C'], stats.norm(0, 0.1))
+	scm.add_observed_variable('C', equation_C, [], stats.norm(0, 0.1))
 	scm.add_observed_variable('X', equation_X, ['C'], stats.norm(0, 0.1))
 	scm.add_observed_variable('Y', equation_Y, ['C', 'X'], stats.norm(0, 0.1))
 
@@ -81,6 +86,41 @@ def Kang_Schafer(seednum = None):
 	Y = ['Y']
 	return [scm, X, Y]
 
+def Kang_Schafer_dim(seednum = None, d=4):
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def equation_Z(**kwargs):
+		num_samples = kwargs.get('num_sample', None)
+		return stats.multivariate_normal.rvs(mean = np.zeros(d), cov = np.eye(d), size=num_samples)
+
+	def equation_X(Z, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+
+		# coeff = [27.4] + [13.7] * (len(Z_list)-1) 
+		coeff = np.array( [(-1)**n * 2**(-n) for n in range(1, d + 1)] )
+		X_agg = np.dot(np.array(Z), coeff.T)  # Compute dot product
+		prob_X = inv_logit(X_agg)
+		return np.random.binomial(1, prob_X)
+
+	def equation_Y(Z, X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+
+		coeff = np.array( [27.4] + [13.7] * (d - 1) )
+		Y_agg = np.dot(np.array(Z), coeff.T)  # Compute dot product
+		Y = 210 + X*Y_agg + noise
+		return Y
+
+	scm = StructuralCausalModel()
+	scm.add_observed_variable('Z', equation_Z, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('X', equation_X, ['Z'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y', equation_Y, ['Z','X'], stats.norm(0, 0.1))
+
+	X = ['X']
+	Y = ['Y']
+	return [scm, X, Y]
+
 def Dukes_Vansteelandt_Farrel(seednum = None, d=200):
 	# Inference for treatment effect parameters in potentially misspecified high-dimensional models
 	if seednum is not None: 
@@ -89,148 +129,447 @@ def Dukes_Vansteelandt_Farrel(seednum = None, d=200):
 
 	def equation_Z(**kwargs):
 		num_samples = kwargs.pop('num_sample')
-		return stats.multivariate_normal.rvs(mean=[0,0], cov=[[1, 0.8], [0.8, 1]], size=num_samples)
+		first_column = [2**(-abs(j - 0) - 1) for j in range(d)]
+		first_row = [2**(-abs(0 - k) - 1) for k in range(d)]
+		toeplitz_matrix = toeplitz(first_column, first_row)
+		
+		return stats.multivariate_normal.rvs(mean = np.zeros(d), cov = toeplitz_matrix, size=num_samples)
+
+	def equation_X(Z, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		coeffs = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
+		prob_X = inv_logit( np.dot(np.array(coeffs), np.array(Z).T ) )
+		return np.random.binomial(1, prob_X)
+
+	def equation_Y(Z,X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		coeffs = [-1,1,-1] + [(i - 2) ** (-2) for i in range(4,d+1)]
+		Y = np.dot(np.array(coeffs), np.array(Z).T ) + 0.3 * X + noise
+		return Y
 	
 	scm = StructuralCausalModel()
 	scm.add_observed_variable('Z', equation_Z, [], stats.norm(0, 0.1))
-	
-
-def Kang_Schafer_dim(seednum = None, d=4):
-	if seednum is not None: 
-		random.seed(int(seednum))
-		np.random.seed(seednum)
-
-	def create_equation_Zi(i):
-		def equation_Zi(**kwargs):
-			num_samples = kwargs.get('num_sample', None)
-			Zi = np.random.normal(0,1,num_samples)
-			return Zi
-		return equation_Zi
-
-	def equation_X(Z_list, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-
-		# coeff = [27.4] + [13.7] * (len(Z_list)-1) 
-		coeff = [(-1)**n * 2**(-n) for n in range(1, d + 1)]
-		X_agg = np.dot(np.array(Z_list).T, coeff)  # Compute dot product
-		prob_X = inv_logit(X_agg)
-		return np.random.binomial(1, prob_X)
-
-	def equation_Y(Z_list, X, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-
-		coeff = [27.4] + [13.7] * (len(Z_list) - 1)
-		Y_agg = np.dot(np.array(Z_list).T, coeff)  # Compute dot product
-		Y = 210 + X*Y_agg + noise
-		return Y
-
-	scm = StructuralCausalModel()
-	
-	# Add observed variables Zi using dynamically generated equations
-	Z_list = []
-	for i in range(d):
-		equation_Zi = create_equation_Zi(i)  # Dynamically create equation_Wi
-		Z_name = f'Z{i+1}'
-		scm.add_observed_variable(Z_name, equation_Zi, [], stats.norm(0, 0.1))
-		Z_list.append(Z_name)
-
-		
-	# Modify this line to correctly pass Z_list during SCM computation
-	def equation_X_wrapper(**kwargs):
-		Z_values = [kwargs[f'Z{i+1}'] for i in range(d)]  # Collect all Wi values as W_list
-		return equation_X(Z_values, **kwargs)
-
-	# Modify this line to correctly pass Z_list during SCM computation
-	def equation_Y_wrapper(**kwargs):
-		Z_values = [kwargs[f'Z{i+1}'] for i in range(d)]  # Collect all Wi values as W_list
-		return equation_Y(Z_values, **kwargs)
-
-
-	# scm.add_observed_variable('W', equation_W, ['U_WX', 'U_WY'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X', equation_X_wrapper, Z_list, stats.norm(0, 0.1))
-	scm.add_observed_variable('Y', equation_Y_wrapper, Z_list + ['X'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X', equation_X, ['Z'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y', equation_Y, ['Z', 'X'], stats.norm(0, 0.1))
 
 	X = ['X']
 	Y = ['Y']
 	return [scm, X, Y]
 
+# def mSBD_SCM_timestep(seednum=None, d=4, time_step=3):
+# 	if seednum is not None:
+# 		random.seed(int(seednum))
+# 		np.random.seed(seednum)
 
-def mSBD_SCM(seednum = None):
+# 	scm = StructuralCausalModel()
+# 	prev_lists = []
+
+# 	for t in range(1, time_step + 1):
+# 		# Define Z equations
+# 		def make_equation_Z(prev_lists, noise, **kwargs):
+# 			num_samples = kwargs.get('num_sample', None)
+# 			starting_nvec = np.zeros(num_samples)
+# 			Zt = stats.multivariate_normal.rvs(mean=np.zeros(d), cov=np.eye(d), size=num_samples)
+
+# 			coeffs = [-(i) ** (-2) for i in range(1, d + 1)]
+# 			coeff2 = 2
+
+# 			for prev_var in prev_lists:
+# 				prev_var = scm.sample_dict[prev_var]
+# 				if len(prev_var.shape) == 2:
+# 					mean_Z = np.dot(np.array(starting_nvec).T, np.array(prev_var))
+# 					mean_Z = (np.max(mean_Z) - mean_Z) / (np.max(mean_Z) - np.min(mean_Z))
+# 					Zt += stats.multivariate_normal.rvs(mean=mean_Z, cov=np.eye(d), size=num_samples)
+# 				else:
+# 					starting_nvec += (coeff2 ** -2) * prev_var
+# 					coeff2 += 2
+
+# 			Zt = (np.max(Zt) - Zt) / (np.max(Zt) - np.min(Zt))
+# 			return Zt
+
+# 		if t == 1:
+# 			parents = []
+# 			def equation_Z_wrapper(**kwargs):
+# 				return make_equation_Z(parents, **kwargs)
+# 			scm.add_observed_variable(f'Z{t}', equation_Z_wrapper, [], stats.norm(0, 0.1))
+# 		else:
+# 			parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
+# 			def equation_Z_wrapper(**kwargs):
+# 				local_parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
+# 				return make_equation_Z(local_parents, **kwargs)
+# 			scm.add_observed_variable(f'Z{t}', equation_Z_wrapper, parents, stats.norm(0, 0.1))
+
+# 		prev_lists.append(f'Z{t}')
+
+# 		# Define X equations
+# 		def make_equation_X(prev_lists, noise, t=t, **kwargs):
+# 			num_samples = kwargs.get('num_sample', None)
+# 			starting_nvec = np.zeros(num_samples)
+# 			coeffs = [-(i) ** (-2) for i in range(1, d + 1)]
+# 			coeff2 = 2
+
+# 			for prev_var in prev_lists:
+# 				prev_var = scm.sample_dict[prev_var]
+# 				if len(prev_var.shape) == 2:
+# 					starting_nvec += np.dot(np.array(coeffs), np.array(prev_var).T)
+# 				else:
+# 					starting_nvec += (coeff2 ** -2) * prev_var
+# 					coeff2 += 2
+
+# 			starting_nvec = (np.max(starting_nvec) - starting_nvec) / (np.max(starting_nvec) - np.min(starting_nvec))
+# 			prob = inv_logit(starting_nvec)
+# 			return np.random.binomial(1, prob)
+
+# 		parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
+# 		parents.append(f'Z{t}')
+# 		def equation_X_wrapper(**kwargs):
+# 			local_parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
+# 			local_parents.append(f'Z{t}')
+# 			return make_equation_X(local_parents, **kwargs)
+# 		scm.add_observed_variable(f'X{t}', equation_X_wrapper, parents, stats.norm(0, 0.1))
+
+# 		prev_lists.append(f'X{t}')
+
+# 		# Define Y equations
+# 		def make_equation_Y(prev_lists, noise, t=t, **kwargs):
+# 			num_samples = kwargs.get('num_sample', None)
+# 			starting_nvec = np.zeros(num_samples)
+# 			coeffs = [-(i) ** (-2) for i in range(1, d + 1)]
+# 			coeff2 = 2
+
+# 			for prev_var in prev_lists:
+# 				prev_var = scm.sample_dict[prev_var]
+# 				if len(prev_var.shape) == 2:
+# 					starting_nvec += np.dot(np.array(coeffs), np.array(prev_var).T)
+# 				else:
+# 					starting_nvec += (coeff2 ** -0.5) * prev_var
+# 					coeff2 += 2
+
+# 			starting_nvec = (np.max(starting_nvec) - starting_nvec) / (np.max(starting_nvec) - np.min(starting_nvec))
+# 			prob = inv_logit(starting_nvec)
+# 			return np.random.binomial(1, prob)
+
+# 		parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
+# 		parents.append(f'Z{t}')
+# 		parents.append(f'X{t}')
+# 		def equation_Y_wrapper(**kwargs):
+# 			local_parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
+# 			local_parents.append(f'Z{t}')
+# 			local_parents.append(f'X{t}')
+# 			return make_equation_Y(local_parents, **kwargs)
+# 		scm.add_observed_variable(f'Y{t}', equation_Y_wrapper, parents, stats.norm(0, 0.1))
+		
+# 		prev_lists.append(f'Y{t}')
+
+# 	# Collect all X and Y variables based on the time step
+# 	X = [f'X{t}' for t in range(1, time_step + 1)]
+# 	Y = [f'Y{t}' for t in range(1, time_step + 1)]
+
+# 	return [scm, X, Y]
+
+
+def mSBD_SCM(seednum = None, d=4):
 	if seednum is not None: 
 		random.seed(int(seednum))
 		np.random.seed(seednum)
 
-	def equation_Z1(U_Z1Y2, noise, **kwargs):
-		return U_Z1Y2 + noise 
+	def equation_Z1(noise, **kwargs):
+		num_samples = kwargs.get('num_sample', None)
+		return stats.multivariate_normal.rvs(mean = np.zeros(d), cov = np.eye(d), size=num_samples)
 
-	def equation_X1(U_X1X2, Z1, noise, **kwargs):
+	def equation_X1(Z1, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		linear_model = (0.3 * Z1) + 0.7*U_X1X2 + noise + 1
-		prob = inv_logit(linear_model)
+		coeffs = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
+		prob = inv_logit( np.dot(np.array(coeffs), np.array(Z1).T ) )
 		return np.random.binomial(1, prob)
 
-	def equation_Y1(U_Y1X2, Z1, X1, noise, **kwargs):
+	def equation_Y1(Z1, X1, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		linear_model = (0.3 * Z1) + 0.7*U_Y1X2 + noise + 3*(2*X1-1)
-		prob = inv_logit(linear_model)
+		coeffs = [-1,1,-1] + [(i - 2) ** (-2) for i in range(4,d+1)]
+		prob = inv_logit( np.dot(np.array(coeffs), np.array(Z1).T) + 0.3 * X1 + noise )
 		return np.random.binomial(1, prob)
 
 	def equation_Z2(Z1, X1, Y1, noise, **kwargs):
-		linear_model = (0.3 * Z1) -2*(2*X1 -1) + 3*(2*Y1-1) + noise 
-		return linear_model
-
-	def equation_X2(U_Y1X2, U_X1X2, Z1, X1, Y1, Z2,  noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		linear_model = (0.3 * Z2) + 0.7*U_Y1X2 - U_X1X2 + 2*(2*(Z1 + X1 + Y1)-1)
-		prob = inv_logit(linear_model)
+		coeffs = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
+		mean_Z2 = np.dot(np.array(X1 + Y1).T, np.array(Z1)) 
+		mean_Z2 = (np.max(mean_Z2)-mean_Z2)/(np.max(mean_Z2)-np.min(mean_Z2))
+		return stats.multivariate_normal.rvs(mean = mean_Z2, cov = np.eye(d), size=num_samples)
+
+	def equation_X2(Z1, X1, Y1, Z2,  noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		coeffs_1 = [-1,1,-1] + [(i - 2) ** (-2) for i in range(4,d+1)]
+		coeffs_2 = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
+		prob = inv_logit( np.dot(np.array(coeffs_1), np.array(Z1).T) + np.dot(np.array(coeffs_2), np.array(Z2).T) - 0.5 * X1 + 0.3 * Y1 + noise )
 		return np.random.binomial(1, prob)
 
-	def equation_Y2(U_Z1Y2, Z1, X1, Y1, Z2, X2, noise, **kwargs):
+	def equation_Y2(Z1, X1, Y1, Z2, X2, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		linear_model = (0.3 * Z2) + 0.7*U_Z1Y2 - 2*(2*X2-1) + 1*(Z1 + X1 + Y1 + Z2) + noise 
-		prob = inv_logit(linear_model)
+		coeffs_1 = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
+		coeffs_2 = [-1,1,-1] + [(i - 2) ** (-2) for i in range(4,d+1)]
+		prob = inv_logit( np.dot(np.array(coeffs_1), np.array(Z1).T) + np.dot(np.array(coeffs_2), np.array(Z2).T) + 0.3 * X1 + 0.3 * Y1 + 0.3 * X2 + noise )
 		return np.random.binomial(1, prob)
 
 	scm = StructuralCausalModel()
-	scm.add_unobserved_variable('U_Z1Y2', stats.norm(0, 1))
-	scm.add_unobserved_variable('U_X1X2', stats.norm(0, 1))
-	scm.add_unobserved_variable('U_Y1X2', stats.norm(0, 1))
-	scm.add_observed_variable('Z1', equation_Z1, ['U_Z1Y2'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X1', equation_X1, ['U_X1X2', 'Z1'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y1', equation_Y1, ['U_Y1X2', 'Z1', 'X1'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z1', equation_Z1, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('X1', equation_X1, ['Z1'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y1', equation_Y1, ['Z1', 'X1'], stats.norm(0, 0.1))
 	scm.add_observed_variable('Z2', equation_Z2, ['Z1', 'X1', 'Y1'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X2', equation_X2, ['U_Y1X2', 'U_X1X2', 'Z1', 'X1', 'Y1', 'Z2'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y2', equation_Y2, ['U_Z1Y2', 'Z1', 'X1', 'Y1', 'Z2', 'X2'], stats.norm(0, 0.1))	
+	scm.add_observed_variable('X2', equation_X2, ['Z1', 'X1', 'Y1', 'Z2'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y2', equation_Y2, ['Z1', 'X1', 'Y1', 'Z2', 'X2'], stats.norm(0, 0.1))	
 
 	X = ['X1', 'X2']
 	Y = ['Y1', 'Y2']
 
 	return [scm, X, Y]
 
-def FD_SCM(seednum = None):
+
+def Luedtke_v1(seednum = None):
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def equation_Z1(noise, **kwargs):
+		num_samples = kwargs.get('num_sample', None)
+		return np.random.normal(0,1,size=num_samples)
+
+	def equation_X1(Z1, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( Z1 ) 
+		return np.random.binomial(1, prob)
+
+	def equation_Z2(Z1, X1, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		return np.random.normal(0,1,size=num_samples)
+
+	def equation_X2(Z1, X1, Z2,  noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( Z2 + X1 + Z1  )
+		return np.random.binomial(1, prob)
+
+	def equation_Z3(Z1, X1, Z2, X2, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		Z3 = Z1* X2 + Z2 * X1 + Z2 * X2  + noise 
+		return Z3 
+
+	def equation_X3(Z1, X1, Z2, X2, Z3,  noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( Z1 + X1 + Z2 + X2 + Z3  )
+		return np.random.binomial(1, prob)
+
+	def equation_Y(Z1, X1, Z2, X2, Z3, X3, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( Z2*X3 + X2*Z3 + Z3*X3  )
+		return np.random.binomial(1, prob)
+
+	scm = StructuralCausalModel()
+	scm.add_observed_variable('Z1', equation_Z1, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('X1', equation_X1, ['Z1'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z2', equation_Z2, ['Z1', 'X1'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X2', equation_X2, ['Z1', 'X1', 'Z2'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z3', equation_X2, ['Z1', 'X1', 'Z2', 'X2'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X3', equation_X2, ['Z1', 'X1', 'Z2', 'X2', 'Z3'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y', equation_X2, ['Z1', 'X1', 'Z2', 'X2', 'Z3', 'X3'], stats.norm(0, 0.1))
+
+	X = ['X1', 'X2', 'X3']
+	Y = ['Y']
+
+	return [scm, X, Y]
+
+
+def Luedtke_v2(seednum = None):
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def equation_Z1(noise, **kwargs):
+		num_samples = kwargs.get('num_sample', None)
+		Z = np.abs( np.random.normal(0,1,size=num_samples) )
+		return Z 
+
+	def equation_X1(Z1, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( Z1 ) 
+		return np.random.binomial(1, prob)
+
+	def equation_Z2(Z1, X1, noise, **kwargs):
+		num_samples = kwargs.get('num_sample', None)
+		Z = -2*X1 + 0.5 * Z1 +  np.abs( np.random.normal(0,1,size=num_samples) )
+		return Z 
+
+	def equation_X2(Z1, X1, Z2, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		eq1 = inv_logit( 1.7 - 2*( inv_logit(Z2) > 0.9 ) )
+		prob = inv_logit( X1* eq1 )
+		return np.random.binomial(1, prob)
+
+	def equation_Y2(Z1, X1, Z2, X2, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( -3 + 0.5*Z1*X2 + 0.5 * X1*Z2 + 0.5 * Z2 * X2 )
+		return np.random.binomial(1, prob)
+
+	def equation_Z3(Z1, X1, Z2, X2, Y2, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		L3 = np.abs( X1 * Z2 + Z2 * X2 + noise ) 
+		Z3 = -2 * 0.5 * Z2 + L3 
+		return Z3 
+
+	def equation_X3(Z1, X1, Z2, X2, Y2, Z3, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		eq1 = inv_logit( 1.7 - 2*( inv_logit(Z3) > 0.85 ) )
+		prob = inv_logit( X2* eq1 )
+		return np.random.binomial(1, prob)
+
+	def equation_Y3(Z1, X1, Z2, X2, Y2, Z3, X3, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( -3*Y2 + 0.5*Z2*X3 + 0.5 * X2*Z3 + 0.5 * Z3 * X3 )
+		return np.random.binomial(1, prob)
+
+	def equation_Z4(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		L4 = np.abs( Z2 * X3 + X2 * Z3 + Z3 * X3 + noise ) 
+		Z4 = -2 * 0.5 * Z3 + L4 
+		return Z4 
+
+	def equation_X4(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		eq1 = inv_logit( 1.7 - 2*( inv_logit(Z4) > 0.8 ) )
+		prob = inv_logit( X3* eq1 )
+		return np.random.binomial(1, prob)
+
+	def equation_Y4(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, X4, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( -3*Y3 + 0.5*Z3*X4 + 0.5 * X3*Z4 + 0.5 * Z4 * X4 )
+		return np.random.binomial(1, prob)
+
+	def equation_Z5(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, X4, Y4, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		L5 = np.abs( Z2 * X4 + X2 * Z4 + Z4 * X4 + noise ) 
+		Z5 = -1 + 0.25 * Z4 + 0.5 * L5 - 0.1 * Z4 * L5 + 1.5 * Z4
+		return Z5 
+
+	def equation_X5(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, X4, Y4, Z5, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		eq1 = inv_logit( 2 - 2*( inv_logit(Z5) > 0.8 ) )
+		prob = inv_logit( X4* eq1 )
+		return np.random.binomial(1, prob)
+
+	def equation_Y5(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, X4, Y4, Z5, X5, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob = inv_logit( -Y4 + X5 + Z5 * X5 + 0.2 * X4 * Z5 )
+		return np.random.binomial(1, prob)
+
+	scm = StructuralCausalModel()
+	scm.add_observed_variable('Z1', equation_Z1, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('X1', equation_X1, ['Z1'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z2', equation_Z2, ['Z1', 'X1'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X2', equation_X2, ['Z1', 'X1', 'Z2'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y2', equation_Y2, ['Z1', 'X1', 'Z2', 'X2'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z3', equation_Z3, ['Z1', 'X1', 'Z2', 'X2', 'Y2'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X3', equation_X3, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y3', equation_Y3, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z4', equation_Z4, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X4', equation_X4, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y4', equation_Y4, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4', 'X4'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z5', equation_Z5, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4', 'X4', 'Y4'], stats.norm(0, 0.1))
+	scm.add_observed_variable('X5', equation_X5, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4', 'X4', 'Y4', 'Z5'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Y5', equation_Y5, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4', 'X4', 'Y4', 'Z5','X5'], stats.norm(0, 0.1))
+
+	X = ['X1', 'X2', 'X3', 'X4', 'X5']
+	Y = ['Y3', 'Y4', 'Y5']
+
+	return [scm, X, Y]
+
+def Fulcher_FD(seednum = None):
+	if seednum is not None: 
+		random.seed(int(seednum))
+		np.random.seed(seednum)
+
+	def equation_C1(noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		C1 = np.random.binomial(1, 0.6, num_samples)
+		return C1 
+
+	def equation_C2(C1, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_C2 = inv_logit(1 + 0.5 * C1)
+		return np.random.binomial(1, prob_C2) 
+
+	def equation_C3(noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		C3 = np.random.binomial(1, 0.3, num_samples)
+		return C3 
+
+	def equation_X(C1, C2, C3, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_X = inv_logit( 0.5 + 0.2 * C1 + 0.4 * C2 + 0.5 * C1 * C2 + 0.2 * C3 )
+		return np.random.binomial(1, prob_X)
+
+	def equation_Z(C1, C2, X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_Z = inv_logit( 1 + X - 2*C1 + 2*C2 + 8*C1*C2 + noise )
+		return np.random.binomial(1, prob_Z)
+
+	def equation_Y(C1, C2, C3, Z, X, noise, **kwargs):
+		num_samples = kwargs.pop('num_sample')
+		prob_Y = inv_logit( 1 + 2*X + 2*Z - 8*X*Z + 3*C1 + C2 + C1*C2 + C3 + noise )
+		return np.random.binomial(1, prob_Y)
+
+
+	scm = StructuralCausalModel()
+	scm.add_observed_variable('C1', equation_C1, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('C2', equation_C2, ['C1'], stats.norm(0, 0.1))
+	scm.add_observed_variable('C3', equation_C3, [], stats.norm(0, 0.1))
+	scm.add_observed_variable('X', equation_X, ['C1', 'C2', 'C3'], stats.norm(0, 0.1))
+	scm.add_observed_variable('Z', equation_Z, ['C1', 'C2', 'X'], stats.norm(0, 4))
+	scm.add_observed_variable('Y', equation_Y, ['C1', 'C2', 'C3', 'Z', 'X'], stats.norm(0, 1))
+
+	X = ['X']
+	Y = ['Y']
+
+	return [scm, X, Y]
+
+
+def FD_SCM(seednum = None, dC = 4, dZ = 2):
 	if seednum is not None: 
 		random.seed(int(seednum))
 		np.random.seed(seednum)
 
 	def equation_C(U_CX, U_CY, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_C = inv_logit( U_CX + U_CY + noise )
-		return np.random.binomial(1, prob_C)
-		# return U_CX + U_CY + noise 
+		first_column = [2**(-abs(j - 0) - 1) for j in range(dC)]
+		first_row = [2**(-abs(0 - k) - 1) for k in range(dC)]
+		toeplitz_matrix = toeplitz(first_column, first_row)
+		C = stats.multivariate_normal.rvs(mean = np.zeros(dC), cov = toeplitz_matrix, size=num_samples)
+		for didx in range(dC):
+			C[:,didx] = C[:,didx] + U_CX + U_CY
+		return C
 
 	def equation_X(U_XY, U_CX, C, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_X = inv_logit(- (0.3 * C) + U_XY - 0.5*U_CX + noise)
+		coeff_X = [-(i) ** (-2) for i in range(1, dC + 1)]
+		prob_X = inv_logit( np.dot(np.array(coeff_X), np.array(C).T) + U_XY - 0.5*U_CX + noise )
 		return np.random.binomial(1, prob_X)
 
-	def equation_Z(C,X, noise, **kwargs):
+	def equation_Z(C, X, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_Z = inv_logit(0.3 * (2*X-1) + C + noise)
-		return np.random.binomial(1, prob_Z)
+		first_column = [2**(-abs(j - 0) - 1) for j in range(dZ)]
+		first_row = [2**(-abs(0 - k) - 1) for k in range(dZ)]
+		toeplitz_matrix = toeplitz(first_column, first_row)
+		Z = stats.multivariate_normal.rvs(mean = np.zeros(dZ), cov = toeplitz_matrix, size=num_samples)
+		
+		coeff_Z = [-(i) ** (-2) for i in range(1, dC + 1)]
+		for didx in range(dZ):
+			prob_Z = inv_logit( np.dot(np.array(coeff_Z), np.array(C).T) + Z[:,didx] + (2*X-1) + noise )
+			Z[:,didx] = np.random.binomial(1, prob_Z)
+		return Z
 
 	def equation_Y(U_XY, U_CY, C, Z, noise, **kwargs):
 		num_samples = kwargs.pop('num_sample')
-		prob_Y = inv_logit( 2*Z - 1 + C + 1.5 * U_XY - 0.5*U_CY + noise)
+		coeff_C = [-(i) ** (-2) for i in range(1, dC + 1)]
+		coeff_Z = [-(i+1) ** (-2) for i in range(1, dZ + 1)]
+
+		prob_Y = inv_logit( np.dot(np.array(coeff_Z), np.array(Z).T) + np.dot(np.array(coeff_C), np.array(C).T) + 1.5 * U_XY - 0.5*U_CY + noise )
 		return np.random.binomial(1, prob_Y)
 
 

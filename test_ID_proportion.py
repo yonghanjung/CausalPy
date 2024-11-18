@@ -20,13 +20,14 @@ if __name__ == "__main__":
 
 	num_sim = 10000
 
-	num_observables = 10
-	num_unobservables = 5
-	num_treatments = 2
+	num_observables = random.randint(5, 15)  # A random integer between 1 and 10
+	num_unobservables = random.randint(0, num_observables)
+	# num_treatments = random.randint(2, int(round(num_observables/2)))
+	num_treatments = 1
 	num_outcomes = 1
 
 	graph_counter = 0 
-	graph_type = {"BD": 0, "mSBD": 0, "FD": 0, "Tian": 0, "gTian": 0, "Ratio": 0, "MECE_FD": 0, "MECE_Tian": 0, "MECE_gTian": 0, "MECE_product": 0}
+	graph_type = {"BD": 0, "mSBD": 0, "FD": 0, "Tian": 0, "gTian": 0, "Product": 0, "Ratio": 0, "MECE_FD": 0, "MECE_Tian": 0, "MECE_gTian": 0, "MECE_product": 0}
 
 	while graph_counter < num_sim: 
 		seednum = random.randint(1, 1000000)
@@ -57,16 +58,19 @@ if __name__ == "__main__":
 		if satisfied_gTian:
 			graph_type['gTian'] += 1
 
+		if satisfied_product:
+			graph_type['Product'] += 1
+
 		if satisfied_BD == False and satisfied_mSBD == False and satisfied_FD:
 			graph_type['MECE_FD'] += 1
 
-		if satisfied_mSBD == False and satisfied_Tian == True:
+		if satisfied_BD == False and satisfied_mSBD == False and satisfied_FD == False and satisfied_Tian:
 			graph_type['MECE_Tian'] += 1
 
-		if satisfied_mSBD == False and satisfied_Tian == False and satisfied_gTian:
+		if satisfied_BD == False and satisfied_mSBD == False and satisfied_FD == False and satisfied_Tian == False and satisfied_gTian:
 			graph_type['MECE_gTian'] += 1
 
-		if satisfied_BD == False and satisfied_mSBD == False and satisfied_Tian == False and satisfied_gTian == False and satisfied_product:
+		if satisfied_BD == False and satisfied_mSBD == False and satisfied_FD == False and satisfied_Tian == False and satisfied_gTian == False and satisfied_product:
 			graph_type['MECE_product'] += 1
 
 		if satisfied_BD == False and satisfied_mSBD == False and satisfied_Tian == False and satisfied_gTian == False and satisfied_product == False:

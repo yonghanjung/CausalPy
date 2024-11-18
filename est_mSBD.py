@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from itertools import product
+from itertools import chain
 from sklearn.model_selection import KFold
 import xgboost as xgb
 import copy
@@ -31,12 +32,23 @@ warnings.filterwarnings("ignore", category=UserWarning, module='osqp')
 def xgb_predict(model, data, col_feature):
 	return model.predict(xgb.DMatrix(data[col_feature]))
 
-def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False):
+def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False, **kwargs):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
 	topo_V = graph.find_topological_order(G)
 	Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
+
+	cluster_variables = kwargs.get('cluster_variables', None)
+	
+	if cluster_variables is not None and set(cluster_variables).intersection(set(Z)):
+		clustered_Z = list(set(cluster_variables).intersection(set(Z)))
+		non_clustered_Z = list(set(Z) - set(clustered_Z))
+		clustered_Z_list = []
+		for Zi in clustered_Z:
+			clustered_Z_list += [node for node in obs_data.columns if node.startswith(Zi)]
+		Z = clustered_Z_list + non_clustered_Z
+
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
 
 	z_score = norm.ppf(1 - alpha_CI / 2)
@@ -122,7 +134,7 @@ def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = Fal
 
 	return ATE, VAR, lower_CI, upper_CI
 
-def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False): 
+def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False, **kwargs): 
 	"""
 	Estimate causal effects using the mSBD method.
 
@@ -158,6 +170,29 @@ def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_
 
 	# Check for SAC criterion satisfaction and organize variables into dictionaries
 	dict_X, dict_Z, dict_Y = mSBD.check_SAC_with_results(G,X,Y, minimum = True)
+
+	cluster_variables = kwargs.get('cluster_variables', None)
+	for idx, (key, value) in enumerate(dict_Z.items()):
+		# Value = Zi 
+		if cluster_variables is not None and set(cluster_variables).intersection(set(value)):
+			clustered_Zi = list(set(cluster_variables).intersection(set(value)))
+			non_clustered_Zi = list(set(value) - set(clustered_Zi))
+			clustered_Zi_list = []
+			for Zij in clustered_Zi:
+				clustered_Zi_list += [node for node in obs_data.columns if node.startswith(Zij)]
+			Zi = clustered_Zi_list + non_clustered_Zi
+			dict_Z[key] = Zi 
+
+	topo_V_new = []
+	for node in topo_V:
+		if node in dict_X.keys():
+			topo_V_new.append(dict_X[node])
+		elif node in dict_Y.keys():
+			topo_V_new.append(dict_Y[node])
+		elif node in dict_Z.keys():
+			topo_V_new.append(dict_Z[node])
+	topo_V = list(chain(*topo_V_new))
+
 	X_list = list(tuple(dict_X.values()))
 	mSBD_length = len(dict_X)
 
@@ -335,7 +370,7 @@ def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_
 	
 	return ATE, VAR, lower_CI, upper_CI
 
-def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False): 
+def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False, **kwargs): 
 	"""
 	Estimate causal effects using the mSBD method.
 
@@ -372,6 +407,29 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, seed
 	dict_X, dict_Z, dict_Y = mSBD.check_SAC_with_results(G,X,Y, minimum = True)
 	X_list = list(tuple(dict_X.values()))
 	mSBD_length = len(dict_X)
+
+	cluster_variables = kwargs.get('cluster_variables', None)
+	for idx, (key, value) in enumerate(dict_Z.items()):
+		# Value = Zi 
+		if cluster_variables is not None and set(cluster_variables).intersection(set(value)):
+			clustered_Zi = list(set(cluster_variables).intersection(set(value)))
+			non_clustered_Zi = list(set(value) - set(clustered_Zi))
+			clustered_Zi_list = []
+			for Zij in clustered_Zi:
+				clustered_Zi_list += [node for node in obs_data.columns if node.startswith(Zij)]
+			Zi = clustered_Zi_list + non_clustered_Zi
+			dict_Z[key] = Zi 
+
+	topo_V_new = []
+	for node in topo_V:
+		if node in dict_X.keys():
+			topo_V_new.append(dict_X[node])
+		elif node in dict_Y.keys():
+			topo_V_new.append(dict_Y[node])
+		elif node in dict_Z.keys():
+			topo_V_new.append(dict_Z[node])
+	
+	topo_V = list(chain(*topo_V_new))
 
 	# Compute IyY: indicator for the outcome variables matching yval
 	IyY = ((obs_data[Y] == tuple(yval))*1).prod(axis=1)
@@ -547,7 +605,7 @@ def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, seed
 	
 	return ATE, VAR, lower_CI, upper_CI
 
-def estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False):
+def estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False, **kwargs):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -558,6 +616,29 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = Fa
 	mSBD_length = len(dict_X)
 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
+
+	cluster_variables = kwargs.get('cluster_variables', None)
+	for idx, (key, value) in enumerate(dict_Z.items()):
+		# Value = Zi 
+		if cluster_variables is not None and set(cluster_variables).intersection(set(value)):
+			clustered_Zi = list(set(cluster_variables).intersection(set(value)))
+			non_clustered_Zi = list(set(value) - set(clustered_Zi))
+			clustered_Zi_list = []
+			for Zij in clustered_Zi:
+				clustered_Zi_list += [node for node in obs_data.columns if node.startswith(Zij)]
+			Zi = clustered_Zi_list + non_clustered_Zi
+			dict_Z[key] = Zi 
+
+	topo_V_new = []
+	for node in topo_V:
+		if node in dict_X.keys():
+			topo_V_new.append(dict_X[node])
+		elif node in dict_Y.keys():
+			topo_V_new.append(dict_Y[node])
+		elif node in dict_Z.keys():
+			topo_V_new.append(dict_Z[node])
+	
+	topo_V = list(chain(*topo_V_new))
 
 	m = len(X)
 
@@ -620,7 +701,8 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = Fa
 						col_label = f'check_mu_{i+1}'
 					
 					mu_models[i] = statmodules.learn_mu(obs_train, col_feature, col_label, params=None)
-					mu_eval_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test[col_feature]))
+					# mu_eval_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test[col_feature]))
+					mu_eval_test_dict[i] = xgb_predict(mu_models[i], obs_test, col_feature)
 					obs_test.loc[:,f'mu_{i}'] = mu_eval_test_dict[i]
 					
 					obs_test_x = copy.copy(obs_test)
@@ -628,10 +710,12 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = Fa
 					obs_train_x = copy.copy(obs_train)
 					obs_train_x[dict_X[f'X{i}'][0]] = x_val.values[X.index(dict_X[f'X{i}'][0])]
 
-					check_mu_train_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_train_x[col_feature]))
+					# check_mu_train_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_train_x[col_feature]))
+					check_mu_train_dict[i] = xgb_predict(mu_models[i], obs_train_x, col_feature)
 					obs_train.loc[:, f'check_mu_{i}'] = check_mu_train_dict[i]
 
-					check_mu_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test_x[col_feature]))
+					# check_mu_test_dict[i] = mu_models[i].predict(xgb.DMatrix(obs_test_x[col_feature]))
+					check_mu_test_dict[i] = xgb_predict(mu_models[i], obs_test_x, col_feature)
 					obs_test.loc[:, f'check_mu_{i}'] = check_mu_test_dict[i]
 
 					# If only_OM == False, then the weight should be computed. 

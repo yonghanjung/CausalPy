@@ -577,7 +577,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 
 	return ATE
 
-def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
+def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kwargs):
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -795,7 +795,7 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123
 				ATE[estimator][tuple(x_val)] += Q_D_val[estimator]
 	return ATE
 
-def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, clip_val = True, minval = 0, maxval = 1):
+def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, clip_val = True, minval = 0, maxval = 1, **kwargs):
 	# Function to clip ATE values
 	def clip_ATE(ATE):
 		if clip_val:
@@ -804,24 +804,30 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 					ATE[estimator][x_val] = np.clip(ATE[estimator][x_val], minval, maxval)
 		return ATE
 
+	cluster_variables = kwargs.get('cluster_variables', None)
+	# print(cluster_variables)
+
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
 	# Handle different cases based on criteria
 	if satisfied_BD: 
-		ATE, _, _, _ = est_mSBD.estimate_BD(G, X, Y, obs_data, only_OM=False)
+		if cluster_variables is None:
+			ATE, _, _, _ = est_mSBD.estimate_BD(G, X, Y, obs_data, only_OM=False)
+		else: 
+			ATE, _, _, _ = est_mSBD.estimate_BD(G, X, Y, obs_data, only_OM=False, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
 
 	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
 	if satisfied_mSBD:
 		if len(Y) == 1:
-			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM=False)
+			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM=False, cluster_variables = cluster_variables)
 		else:
-			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM=False)
+			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM=False, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
 
 	satisfied_Tian = tian.check_Tian_criterion(G, X)
 	if satisfied_Tian:
-		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM=False)
+		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM=False, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
 
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
@@ -841,12 +847,14 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 
 if __name__ == "__main__":
 	# Generate random SCM and preprocess the graph
-	seednum = int(time.time())
-	# seednum = 1726001329
+	# seednum = int(time.time())
+	seednum = 190602
 
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
 	random.seed(seednum)
+
+
 
 	# scm, X, Y = random_generator.Random_SCM_Generator(
 	# 	num_observables=7, num_unobservables=2, num_treatments=2, num_outcomes=1,
@@ -861,27 +869,34 @@ if __name__ == "__main__":
 	# 	seednum = seednum 
 	# )
 
-	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum)	
-	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
-	# scm, X, Y = example_SCM.FD_SCM(seednum = seednum)
+	# scm, X, Y = example_SCM.BD_SCM(seednum = seednum, d=5); cluster_variables = ['C']
+	# scm, X, Y = example_SCM.Kang_Schafer(seednum = seednum)
+	# scm, X, Y = example_SCM.Kang_Schafer_dim(seednum = seednum, d = 20); cluster_variables = ['Z']
+	# scm, X, Y = example_SCM.Dukes_Vansteelandt_Farrel(seednum = seednum); cluster_variables = ['Z']
+
+	# scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum, d=3); cluster_variables = ['Z1', 'Z2']
+	# scm, X, Y = example_SCM.Luedtke_v1(seednum = seednum); cluster_variables = []	
+	# scm, X, Y = example_SCM.Luedtke_v2(seednum = seednum); cluster_variables = []	
+
+	scm, X, Y = example_SCM.FD_SCM(seednum = seednum); cluster_variables = ['C', 'Z']
+	scm, X, Y = example_SCM.Fulcher_FD(seednum = seednum); cluster_variables = []
+
 	# scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Double_Napkin_SCM(seednum = seednum)
 	# scm, X, Y = example_SCM.Napkin_FD_v2_SCM(seednum = seednum)
-	# scm, X, Y = example_SCM.Kang_Schafer(seednum = seednum)
-	scm, X, Y = example_SCM.Kang_Schafer_dim(seednum = seednum, d = 100)
-	# scm, X, Y = example_SCM.Glynn_Quinn(seednum = seednum, scenario_X = 2, scenario_Y = 0)
-
-	
 	
 
 	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
 
-	obs_data = scm.generate_samples(10000, seed=seednum)[topo_V]
+	df_SCM = scm.generate_samples(10000, seed=seednum)
+	observables = [node for node in df_SCM.columns if not node.startswith('U')]
+
+	obs_data = df_SCM[observables]
 
 	# Check various criteria
 	# satisfied_BD = adjustment.check_admissibility(G, X, Y)
@@ -898,7 +913,7 @@ if __name__ == "__main__":
 	y_val = np.ones(len(Y)).astype(int)
 	truth = statmodules.ground_truth(scm, X, Y, y_val)
 
-	ATE = estimate_case_by_case(G, X, Y, y_val, obs_data, clip_val = False)
+	ATE = estimate_case_by_case(G, X, Y, y_val, obs_data, clip_val = False, cluster_variables = cluster_variables)
 
 	performance_table, rank_correlation_table, performance_dict, rank_correlation_dict = statmodules.compute_performance(truth, ATE)
 	print("Performance")

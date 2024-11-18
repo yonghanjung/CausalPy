@@ -4,7 +4,7 @@ import random
 import pyperclip
 import graph
 import identify
-import examples
+import examples 	
 import random_generator
 import SCM 
 import adjustment
@@ -50,17 +50,17 @@ if __name__ == "__main__":
 	# [graph_dict, node_positions, X, Y] = examples.BNS3() 
 	
 	# Generate the random graph 
-	seednum = int(time.time())
-	# seednum = 1724430089
+	# seednum = int(time.time())
+	seednum = 12345
 	np.random.seed(seednum)
 	random.seed(seednum)
 	[graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator(num_observables = 6, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 
 																			condition_ID = True, 
-																			condition_BD = False, 
+																			condition_BD = True, 
 																			condition_mSBD = False, 
 																			condition_FD = False, 
 																			condition_Tian = False, 
-																			condition_gTian = False, 
+																			condition_gTian = True, 
 																			condition_product = True, 
 																			seednum = seednum)
 	# graph_dict = {'U_V1_X3': ['V1', 'X3'], 'V1': ['X1'], 'U_V1_X2': ['X2', 'V1'], 'X2': ['X1', 'V1', 'V2', 'Y1'], 'U_V1_Y1': ['Y1', 'V1'], 'Y1': [], 'X3': ['X2', 'X1', 'V1'], 'U_X1_X3': ['X3', 'X1'], 'X1': ['V2'], 'V2': ['Y1']}

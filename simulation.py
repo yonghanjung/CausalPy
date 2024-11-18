@@ -17,6 +17,7 @@ import est_mSBD
 import statmodules
 import est_general
 import identify 
+import random_generator
 
 import warnings
 from scipy.stats import ConstantInputWarning
@@ -37,7 +38,7 @@ def simulate_scenario(scenario):
 		est_mSBD.xgb_predict = original_xgb_predict
 		statmodules.entropy_balancing_osqp = original_entropy_balancing_osqp
 	
-	if scenario == 2: 
+	elif scenario == 2: 
 		# Modify the train_ML_model to add noise
 		def noisy_predict(model, data, col_feature):
 			pred = original_xgb_predict(model, data, col_feature)
@@ -70,9 +71,11 @@ def simulate_scenario(scenario):
 			return original_xgb_predict(model, random_data, col_feature)
 
 		def contimated_predict2(model, data, col_feature):
-			random_data = pd.DataFrame(np.random.rand(data.shape[0], data.shape[1]), columns=data.columns)
-			orig_predict = original_xgb_predict(model, random_data, col_feature)
-			return np.zeros(len(orig_predict))
+			return np.ones(len(data))
+			# return np.clip(random_data, a_min=0, a_max = None)
+			# random_data = pd.DataFrame(np.random.rand(data.shape[0], data.shape[1]), columns=data.columns)
+			# orig_predict = original_xgb_predict(model, random_data, col_feature)
+			# return np.zeros(len(orig_predict))
 
 		# est_mSBD.xgb_predict = contimated_predict
 		est_mSBD.xgb_predict = contimated_predict2
@@ -97,9 +100,11 @@ def simulate_scenario(scenario):
 
 		statmodules.entropy_balancing_osqp = original_entropy_balancing_osqp
 
-def run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, scenario, seednum, scm, X, Y, pkl_path, filename):
+def run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, scenario, seednum, scm, X, Y, pkl_path, filename, **kwargs):
 	random.seed(seednum)
 	np.random.seed(seednum)
+
+	cluster_variables = kwargs.get('cluster_variables', None)
 
 	print(f'Simulation on Scenario {scenario} with a Base seednum {seednum} with Filename: {filename}')
 
@@ -121,12 +126,14 @@ def run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, s
 
 	for each_seed in tqdm(list_seeds, desc = "Simulating seeds"):	
 		for num_sample in list_num_samples:
-			obs_data = scm.generate_samples(num_sample, seed=each_seed)[topo_V]
+			df_SCM = scm.generate_samples(num_sample, seed=each_seed)
+			observables = [node for node in df_SCM.columns if not node.startswith('U')]
+			obs_data = df_SCM[observables]
 			with simulate_scenario(scenario):
 				if np.max(obs_data[Y]) > 1: 
-					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data,clip_val = False)
+					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data, clip_val = False, cluster_variables = cluster_variables)
 				else:
-					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data)
+					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data, cluster_variables = cluster_variables)
 				# Else 
 				_, _, performance_dict_per_seed, _ = statmodules.compute_performance(truth, ATE)
 
@@ -177,6 +184,7 @@ def draw_plots(performance_dict, **kwargs):
 	fontsize_xtick = kwargs.pop('fontsize_xtick', None)
 	fontsize_ytick = kwargs.pop('fontsize_ytick', None)
 	legend_on = kwargs.pop('legend_on', None)
+	ylim_var = kwargs.pop('ylim_var', None)
 
 	# Create figure
 	plt.figure(figsize=fig_size)
@@ -194,6 +202,7 @@ def draw_plots(performance_dict, **kwargs):
 		# Use a different color and marker for each estimator
 		plt.errorbar(list_num_samples, avg_performance, yerr=std_error, label=estimator, color=colors[idx % len(colors)], marker=markers[idx % len(markers)], capsize=5, linewidth=3)
 
+	plt.ylim(ylim_var)
 	# Add labels, legend, and other plot customizations
 	plt.xlabel('')
 	plt.ylabel('')
@@ -217,18 +226,39 @@ def call_examples(example_number, **kwargs):
 	d = kwargs.get('dim', None)
 	if example_number == 1:
 		# Back-door 
-		scm, X, Y = example_SCM.Kang_Schafer_v0(seednum = seednum)	
+		scm, X, Y = example_SCM.Kang_Schafer(seednum = seednum)	
 		example_name = 'Kang_Schafer'
+		cluster_variables = []
 
 	elif example_number == 11:
 		# Back-door 		
 		scm, X, Y = example_SCM.Kang_Schafer_dim(seednum = seednum, d=d)	
 		example_name = f'Kang_Schafer_dim{d}'
+		cluster_variables = ['Z']
+
+	elif example_number == 12:
+		# Back-door 		
+		scm, X, Y = example_SCM.Kang_Schafer_dim(seednum = seednum, d=d)	
+		example_name = f'Dukes_Vansteelandt_Farrel{d}'
+		cluster_variables = ['Z']
 
 	elif example_number == 2:
 		# mSBD
-		scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum)	
+		scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum, d=d)	
 		example_name = 'CanonMSBD'
+		cluster_variables = ['Z1', 'Z2']
+
+	elif example_number == 21:
+		# mSBD
+		scm, X, Y = example_SCM.Luedtke_v1(seednum = seednum)	
+		example_name = 'Luedtke_v1'
+		cluster_variables = []
+
+	elif example_number == 22:
+		# mSBD
+		scm, X, Y = example_SCM.Luedtke_v2(seednum = seednum)	
+		example_name = 'Luedtke_v2'
+		cluster_variables = []
 
 	elif example_number == 3:
 		# Front-door
@@ -265,63 +295,149 @@ def call_examples(example_number, **kwargs):
 		scm, X, Y = example_SCM.Napkin_FD_v2_SCM(seednum = seednum)
 		example_name = 'CanonRatioFD2'
 
-	# elif example_number == 999:
-	# 	# Random
-	# 	list_num_samples = kwargs.pop('list_num_samples', None)
-
-	# 	scm, X, Y = random_generator.Random_SCM_Generator(
-	# 		num_observables=7, num_unobservables=2, num_treatments=2, num_outcomes=1,
-	# 		condition_ID=True, 
-	# 		condition_BD=True, 
-	# 		condition_mSBD=True, 
-	# 		condition_FD=False, 
-	# 		condition_Tian=True, 
-	# 		condition_gTian=True,
-	# 		condition_product = True, 
-	# 		discrete = True, 
-	# 		seednum = seednum 
-	# 	)		
-
-	return scm, X, Y, example_name
+	return scm, X, Y, example_name, cluster_variables
 
 
+def random_scm_experiments(seednum, **kwargs):
+	# Random
+	np.random.seed(seednum)
+	random.seed(seednum)
+
+	# Global Simulation 
+	# num_sim = 4 
+	# num_sample = 1000
+	# simulation_round = 3 
+	# cluster_variables = None 
+	# scenario = 2
+
+	num_sim = kwargs.get('num_sim', 4)
+	num_sample = kwargs.get('num_sample', 1000)
+	simulation_round = kwargs.get('simulation_round', 3)
+	cluster_variables = kwargs.get('cluster_variables', None)
+	scenario = kwargs.get('scenario', 2)
+
+	list_of_estimators = ['OM', 'IPW', 'DML']
+	
+	simulation_counter = 0 
+
+	performance_dict = dict()
+
+	for estimator in list_of_estimators:
+		performance_dict[estimator] = dict()
+
+	while simulation_counter < num_sim: 
+		num_observables = kwargs.get('num_observables', random.randint(5, 15))  # A random integer between 1 and 10
+		num_unobservables = kwargs.get('num_unobservables', random.randint(5, num_observables))
+
+		num_treatments = kwargs.get('num_treatments', random.randint(1, 5))
+		num_outcomes = 1
+
+		scm_seednum = random.randint(1, 1000000)
+		for estimator in list_of_estimators:
+			performance_dict[estimator][scm_seednum] = list()
+			
+		scm, X, Y = random_generator.Random_SCM_Generator2(num_observables = num_observables, num_unobservables = num_unobservables, num_treatments = num_treatments, num_outcomes = num_outcomes, condition_ID = True, seednum = scm_seednum)
+
+		G = scm.graph
+		G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
+		observables = [node for node in G.nodes if not node.startswith('U')]
+		y_val = np.ones(len(Y)).astype(int)
+		truth = statmodules.ground_truth(scm, X, Y, y_val)
+
+		for simulation_idx in range(simulation_round):
+			sample_seed = random.randint(1, 1000000)
+
+			df_SCM = scm.generate_samples(num_sample, seed=sample_seed)
+			obs_data = df_SCM[observables]
+
+			with simulate_scenario(scenario):
+				if np.max(obs_data[Y]) > 1: 
+					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data, clip_val = False, cluster_variables = cluster_variables)
+				else:
+					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data, cluster_variables = cluster_variables)
+				# Else 
+				_, _, performance_dict_per_seed, _ = statmodules.compute_performance(truth, ATE)
+
+				for estimator in list_of_estimators: 
+					performance_dict[estimator][scm_seednum].append( performance_dict_per_seed[estimator] )
+
+		simulation_counter += 1
+	
+	return performance_dict
 
 if __name__ == "__main__":
 	''' 
-	===== Back-door =====
+	===== Kang_Schafer =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 1 240930 0000 
+	# python3 simulation.py 190702 100 1 1 241007 1200 1
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 1 240930 0000 
+	# python3 simulation.py 190702 100 2 1 241007 1200 1
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 1 240930 0000 
+	# python3 simulation.py 190702 100 3 1 241007 1200 1
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 1 240930 0000 
+	# python3 simulation.py 190702 100 4 1 241007 1200 1
 
 	''' 
-	===== Back-door2 =====
+	===== Kang_Schafer dimensional (d=10) =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 11 240930 0000 10
+	# python3 simulation.py 190702 100 1 11 241007 1200 50
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 11 240930 0000 10
+	# python3 simulation.py 190702 100 2 11 241007 1200 50
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 11 240930 0000 10
+	# python3 simulation.py 190702 100 3 11 241007 1200 50
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 11 240930 0000 10
+	# python3 simulation.py 190702 100 4 11 241007 1200 50
+
+	''' 
+	===== Dukes_Vansteelandt_Farrel (d=20) =====
+	'''
+	''' scenario 1 '''
+	# python3 simulation.py 190702 100 1 12 241007 1200 100
+	''' scenario 2 '''
+	# python3 simulation.py 190702 100 2 12 241007 1200 100
+	''' scenario 3 '''
+	# python3 simulation.py 190702 100 3 12 241007 1200 100
+	''' scenario 4 '''
+	# python3 simulation.py 190702 100 4 12 241007 1200 100
+
 
 	''' 
 	===== mSBD =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 2 240911 0000 
+	# python3 simulation.py 190702 100 1 2 241007 1500 50
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 2 240911 0000 
+	# python3 simulation.py 190702 100 2 2 241007 1500 50
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 2 240911 0000 
+	# python3 simulation.py 190702 100 3 2 241007 1500 50
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 2 240911 0000 
+	# python3 simulation.py 190702 100 4 2 241007 1500 50
+
+	''' 
+	===== Luedtke_v1 =====
+	'''
+	''' scenario 1 '''
+	# python3 simulation.py 190702 100 1 21 241007 1500 1
+	''' scenario 2 '''
+	# python3 simulation.py 190702 100 2 21 241007 1500 1
+	''' scenario 3 '''
+	# python3 simulation.py 190702 100 3 21 241007 1500 1
+	''' scenario 4 '''
+	# python3 simulation.py 190702 100 4 21 241007 1500 1
+
+	''' 
+	===== Luedtke_v2 =====
+	'''
+	''' scenario 1 '''
+	# python3 simulation.py 190702 100 1 22 241007 2100 1
+	''' scenario 2 '''
+	# python3 simulation.py 190702 100 2 22 241007 2100 1
+	''' scenario 3 '''
+	# python3 simulation.py 190702 100 3 22 241007 2100 1
+	''' scenario 4 '''
+	# python3 simulation.py 190702 100 4 22 241007 2100 1
 
 	''' 
 	===== FD =====
@@ -408,44 +524,54 @@ if __name__ == "__main__":
 	''' scenario 4 '''
 	# python3 simulation.py 190702 100 4 9 240917 0000 
 
+	# seednum = int(sys.argv[1])
+	# simulation_round = int(sys.argv[2])
+	# scenario = int(sys.argv[3])
+	# example_number = int(sys.argv[4])
+	# sim_date = sys.argv[5]
+	# sim_time = sys.argv[6]
+	# sim_dim = int(sys.argv[7])
 
-	seednum = int(sys.argv[1])
-	simulation_round = int(sys.argv[2])
-	scenario = int(sys.argv[3])
-	example_number = int(sys.argv[4])
-	sim_date = sys.argv[5]
-	sim_time = sys.argv[6]
-	sim_dim = int(sys.argv[7])
+	# seednum = 190702
+	# simulation_round = 10
+	# scenario = 3
+	# example_number = 21
+	# sim_date = 241118
+	# sim_time = 1500
+	# sim_dim = 4
 
-	np.random.seed(seednum)
-	random.seed(seednum)
 
-	list_num_samples = [100, 20000, 50000, 100000]
-	# list_num_samples = [100, 1000, 10000]
-	list_of_estimators = ['OM', 'IPW', 'DML']
+	# np.random.seed(seednum)
+	# random.seed(seednum)
+
+	# list_num_samples = [100, 20000, 50000, 100000]
+	# # list_num_samples = [100, 1000, 10000]
+	# list_of_estimators = ['OM', 'IPW', 'DML']
 	
-	scm, X, Y, example_name = call_examples(example_number, dim=sim_dim)
+	# scm, X, Y, example_name, cluster_variables = call_examples(example_number, dim=sim_dim)
 
-	pkl_path = 'log_experiments/pkl/'
-	fig_path = 'log_experiments/plot/'
+	# pkl_path = 'log_experiments/pkl/'
+	# fig_path = 'log_experiments/plot/'
 
-	filename = f'{sim_date}{sim_time}_{example_name}_seednum{seednum}_scenario{scenario}_round{simulation_round}'
+	# filename = f'{sim_date}{sim_time}_{example_name}_seednum{seednum}_scenario{scenario}_round{simulation_round}'
 
-	print(f'base_seed: {seednum}, simulation round: {simulation_round}, scenario: {scenario}, example_number: {example_number}, example_name: {example_name}, sim_date_time: {sim_date}_{sim_time}')
+	# print(f'base_seed: {seednum}, simulation round: {simulation_round}, scenario: {scenario}, example_number: {example_number}, example_name: {example_name}, sim_date_time: {sim_date}_{sim_time}')
 
-	pkl_extension = '.pkl'
-	fig_extension = '.png'
+	# pkl_extension = '.pkl'
+	# fig_extension = '.png'
 
-	pkl_filename = filename + pkl_extension
-	fig_filename = filename + fig_extension
-	fig_size = (12,8)
+	# pkl_filename = filename + pkl_extension
+	# fig_filename = filename + fig_extension
+	# fig_size = (12,8)
 
-	performance_dict = run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, scenario, seednum, scm, X, Y, pkl_path, pkl_filename)
+	# performance_dict = run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, scenario, seednum, scm, X, Y, pkl_path, pkl_filename, cluster_variables = cluster_variables)
 
-	if scenario == 1:
-		legend_on = True
-	else:
-		legend_on = False
+	# if scenario == 1:
+	# 	legend_on = True
+	# else:
+	# 	legend_on = False
 
-	draw_plots(performance_dict, fig_size = fig_size, fig_path = fig_path, fig_filename = fig_filename, fontsize_xtick = 30, fontsize_ytick = 30, legend_on = legend_on)
+	# draw_plots(performance_dict, fig_size = fig_size, fig_path = fig_path, fig_filename = fig_filename, fontsize_xtick = 30, fontsize_ytick = 30, legend_on = legend_on)
+
+	performance_dict = random_scm_experiments(190702)
 

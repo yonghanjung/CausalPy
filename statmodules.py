@@ -32,7 +32,11 @@ def ground_truth(scm, X, Y, yval):
 	truth = {}
 	for Xi in X:
 		scm.equations[Xi] = randomized_equation
-	intv_data = scm.generate_samples(1000000)[topo_V]
+
+	df_SCM = scm.generate_samples(1000000)
+	observables = [node for node in df_SCM.columns if not node.startswith('U')]
+
+	intv_data = df_SCM[observables]
 	X_values_combinations = pd.DataFrame(product(*[np.unique(intv_data[Xi]) for Xi in X]), columns=X)
 
 	if len(Y) == 1:

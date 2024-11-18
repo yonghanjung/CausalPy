@@ -53,6 +53,15 @@ class StructuralCausalModel:
 		if variable not in self.unobserved_variables:
 			noise = self.noise_distributions[variable].rvs(size=num_samples)
 			self.sample_dict[variable] = self.equations[variable](**args, noise=noise, num_sample = num_samples)
+			# output = self.equations[variable](**args, noise=noise, num_sample = num_samples)
+
+			# # Check if the output is multivariate
+			# if isinstance(output, np.ndarray) and len(output.shape) == 2:
+			# 	# Assuming the output is of shape (num_samples, num_dimensions)
+			# 	for i in range(output.shape[1]):
+			# 		self.sample_dict[f'{variable}{i+1}'] = output[:, i]
+			# else:
+			# 	self.sample_dict[variable] = output
 		
 		return self.sample_dict[variable]
 
@@ -290,7 +299,22 @@ class StructuralCausalModel:
 		self.sample_dict.clear()
 		for var in self.equations:  # Iterate only over observed variables
 			self.compute(var, num_samples)
-		return pd.DataFrame(self.sample_dict)
+
+		# Prepare a new dictionary to hold the columns for the DataFrame
+		processed_dict = {}
+
+		# Iterate through the keys and values of tmp_dict
+		for key, value in self.sample_dict.items():
+			if isinstance(value, np.ndarray) and len(value.shape) == 2:  # Check if value is multivariate
+				# If multivariate, create new columns for each dimension
+				for i in range(value.shape[1]):
+					processed_dict[f'{key}{i+1}'] = value[:, i]
+			else:
+				# If univariate, add it directly
+				processed_dict[key] = value
+
+		return pd.DataFrame(processed_dict)
+
 
 	def visualize(self):
 		""" Visualize the causal graph with colored nodes for treatments and outcomes. """
