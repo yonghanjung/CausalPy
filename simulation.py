@@ -311,12 +311,14 @@ def random_scm_experiments(seednum, **kwargs):
 	# scenario = 2
 
 	num_sim = kwargs.get('num_sim', 4)
-	num_sample = kwargs.get('num_sample', 1000)
+	list_of_samples = kwargs.get('list_of_samples', [100, 20000, 50000, 100000])
+	# num_sample = kwargs.get('num_sample', 1000)
 	simulation_round = kwargs.get('simulation_round', 3)
 	cluster_variables = kwargs.get('cluster_variables', None)
 	scenario = kwargs.get('scenario', 2)
 
 	list_of_estimators = ['OM', 'IPW', 'DML']
+
 	
 	individual_simulation_counter = 0 
 
@@ -324,10 +326,13 @@ def random_scm_experiments(seednum, **kwargs):
 	sample_seednum_list = [random.randint(1, 1000000) for _ in range(simulation_round)]
 	performance_dict = dict()
 
-	for estimator in list_of_estimators:
-		performance_dict[estimator] = dict()
-		for scm_seednum in scm_seednum_list:
-			performance_dict[estimator][scm_seednum] = list()
+	for scm_seednum in scm_seednum_list:
+		performance_dict[scm_seednum] = dict()
+		for num_sample in list_num_samples:
+			performance_dict[scm_seednum][num_sample] = dict()
+			for estimator in list_of_estimators:
+				performance_dict[scm_seednum][num_sample][estimator] = list()
+			
 
 	for scm_seednum in scm_seednum_list:
 		num_observables = kwargs.get('num_observables', random.randint(5, 15))  # A random integer between 1 and 10
@@ -344,23 +349,24 @@ def random_scm_experiments(seednum, **kwargs):
 		y_val = np.ones(len(Y)).astype(int)
 		truth = statmodules.ground_truth(scm, X, Y, y_val)
 
-		for sample_seednum in sample_seednum_list:
-			individual_simulation_counter += 1 
-			df_SCM = scm.generate_samples(num_sample, seed=sample_seednum)
-			obs_data = df_SCM[observables]
+		for num_sample in list_num_samples:
+			for sample_seednum in sample_seednum_list:
+				individual_simulation_counter += 1 
+				df_SCM = scm.generate_samples(num_sample, seed=sample_seednum)
+				obs_data = df_SCM[observables]
 
-			with simulate_scenario(scenario):
-				if np.max(obs_data[Y]) > 1: 
-					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data, clip_val = False, cluster_variables = cluster_variables)
-				else:
-					ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data, cluster_variables = cluster_variables)
-				# Else 
-				_, _, performance_dict_per_seed, _ = statmodules.compute_performance(truth, ATE)
+				with simulate_scenario(scenario):
+					if np.max(obs_data[Y]) > 1: 
+						ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data, clip_val = False, cluster_variables = cluster_variables)
+					else:
+						ATE = est_general.estimate_case_by_case(G, X, Y, y_val, obs_data, cluster_variables = cluster_variables)
+					# Else 
+					_, _, performance_dict_per_seed, _ = statmodules.compute_performance(truth, ATE)
 
-				for estimator in list_of_estimators: 
-					performance_dict[estimator][scm_seednum].append( performance_dict_per_seed[estimator] )
+					for estimator in list_of_estimators: 
+						performance_dict[scm_seednum][num_sample][estimator].append( performance_dict_per_seed[estimator] )
 
-			print( "Progress:", np.round( (individual_simulation_counter/(num_sim * simulation_round)) * 100, 3 ))
+				print( "Progress:", np.round( (individual_simulation_counter/(num_sim * simulation_round * len(list_num_samples))) * 100, 3 ))
 	
 	return performance_dict
 
@@ -587,8 +593,8 @@ if __name__ == "__main__":
 	'''
 
 	seednum = 190702
-	num_sim = 100 
-	simulation_round = 10 
-	num_sample = 10000
-	performance_dict = random_scm_experiments(seednum = seednum, num_sim = num_sim, simulation_round = simulation_round, num_sample = num_sample)
+	num_sim = 10
+	simulation_round = 10
+	list_num_samples = [100, 20000, 50000, 100000]
+	performance_dict = random_scm_experiments(seednum = seednum, num_sim = num_sim, simulation_round = simulation_round, list_num_samples = list_num_samples)
 
