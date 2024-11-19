@@ -318,24 +318,24 @@ def random_scm_experiments(seednum, **kwargs):
 
 	list_of_estimators = ['OM', 'IPW', 'DML']
 	
-	simulation_counter = 0 
+	individual_simulation_counter = 0 
 
+	scm_seednum_list = [random.randint(1, 1000000) for _ in range(num_sim)]
+	sample_seednum_list = [random.randint(1, 1000000) for _ in range(simulation_round)]
 	performance_dict = dict()
 
 	for estimator in list_of_estimators:
 		performance_dict[estimator] = dict()
+		for scm_seednum in scm_seednum_list:
+			performance_dict[estimator][scm_seednum] = list()
 
-	while simulation_counter < num_sim: 
+	for scm_seednum in scm_seednum_list:
 		num_observables = kwargs.get('num_observables', random.randint(5, 15))  # A random integer between 1 and 10
 		num_unobservables = kwargs.get('num_unobservables', random.randint(5, num_observables))
 
 		num_treatments = kwargs.get('num_treatments', random.randint(1, 5))
 		num_outcomes = 1
 
-		scm_seednum = random.randint(1, 1000000)
-		for estimator in list_of_estimators:
-			performance_dict[estimator][scm_seednum] = list()
-			
 		scm, X, Y = random_generator.Random_SCM_Generator2(num_observables = num_observables, num_unobservables = num_unobservables, num_treatments = num_treatments, num_outcomes = num_outcomes, condition_ID = True, seednum = scm_seednum)
 
 		G = scm.graph
@@ -344,10 +344,9 @@ def random_scm_experiments(seednum, **kwargs):
 		y_val = np.ones(len(Y)).astype(int)
 		truth = statmodules.ground_truth(scm, X, Y, y_val)
 
-		for simulation_idx in range(simulation_round):
-			sample_seed = random.randint(1, 1000000)
-
-			df_SCM = scm.generate_samples(num_sample, seed=sample_seed)
+		for sample_seednum in sample_seednum_list:
+			individual_simulation_counter += 1 
+			df_SCM = scm.generate_samples(num_sample, seed=sample_seednum)
 			obs_data = df_SCM[observables]
 
 			with simulate_scenario(scenario):
@@ -361,7 +360,7 @@ def random_scm_experiments(seednum, **kwargs):
 				for estimator in list_of_estimators: 
 					performance_dict[estimator][scm_seednum].append( performance_dict_per_seed[estimator] )
 
-		simulation_counter += 1
+			print( "Progress:", np.round( (individual_simulation_counter/(num_sim * simulation_round)) * 100, 3 ))
 	
 	return performance_dict
 
@@ -524,6 +523,11 @@ if __name__ == "__main__":
 	''' scenario 4 '''
 	# python3 simulation.py 190702 100 4 9 240917 0000 
 
+
+	''' 
+	===== External (vs. Internal) Variable =====
+	'''
+
 	# seednum = int(sys.argv[1])
 	# simulation_round = int(sys.argv[2])
 	# scenario = int(sys.argv[3])
@@ -532,14 +536,18 @@ if __name__ == "__main__":
 	# sim_time = sys.argv[6]
 	# sim_dim = int(sys.argv[7])
 
-	# seednum = 190702
-	# simulation_round = 10
-	# scenario = 3
-	# example_number = 21
-	# sim_date = 241118
-	# sim_time = 1500
-	# sim_dim = 4
+	seednum = 190702
+	simulation_round = 10
+	scenario = 3
+	example_number = 21
+	sim_date = 241118
+	sim_time = 1500
+	sim_dim = 4
 
+
+	''' 
+	===== Simulation ON (Fixed Graph) =====
+	'''
 
 	# np.random.seed(seednum)
 	# random.seed(seednum)
@@ -573,5 +581,14 @@ if __name__ == "__main__":
 
 	# draw_plots(performance_dict, fig_size = fig_size, fig_path = fig_path, fig_filename = fig_filename, fontsize_xtick = 30, fontsize_ytick = 30, legend_on = legend_on)
 
-	performance_dict = random_scm_experiments(190702)
+
+	''' 
+	===== Random Simulation  =====
+	'''
+
+	seednum = 190702
+	num_sim = 100 
+	simulation_round = 10 
+	num_sample = 10000
+	performance_dict = random_scm_experiments(seednum = seednum, num_sim = num_sim, simulation_round = simulation_round, num_sample = num_sample)
 
