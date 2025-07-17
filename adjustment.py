@@ -215,5 +215,3 @@ def construct_minimum_adjustment_set(G,X,Y):
 	Z2 = list(set(Z1).intersection(set(reacheable_X)))
 	return Z2 
 
-
-

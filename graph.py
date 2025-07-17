@@ -248,23 +248,23 @@ def find_parents(G, C):
 	return list(parents)
 
 def find_children(G, C):
-    """
-    Identify the children of nodes in C in the directed graph G.
+	"""
+	Identify the children of nodes in C in the directed graph G.
 
-    Parameters:
-    G (nx.DiGraph): The directed graph.
-    C (list): Nodes whose children are to be found.
+	Parameters:
+	G (nx.DiGraph): The directed graph.
+	C (list): Nodes whose children are to be found.
 
-    Returns:
-    set: A set of children nodes of the nodes in C.
-    """
-    children = set()
-    for node in C:
-        if node in G:
-            children.update(G.successors(node))
-    # Filter out latent variables and add component if not empty
-    children = {node for node in children if not node.startswith('U') and node not in C}
-    return list(children)
+	Returns:
+	set: A set of children nodes of the nodes in C.
+	"""
+	children = set()
+	for node in C:
+		if node in G:
+			children.update(G.successors(node))
+	# Filter out latent variables and add component if not empty
+	children = {node for node in children if not node.startswith('U') and node not in C}
+	return list(children)
 
 
 
@@ -601,3 +601,46 @@ def find_predecessors(G,W,topo_V = None):
 	W = sorted(W, key=lambda x: topo_V.index(x))
 	return(topo_V[:topo_V.index(W[0])])
 	
+
+def unfold_graph_from_data(G, clustered_list, obs_data):
+	"""
+	Combines building the clustered dictionary from the observation data
+	and unfolding the graph G accordingly.
+
+	Parameters:
+	  G: A networkx graph.
+	  clustered_list: List of base variable names (e.g., ['C', 'Z']).
+	  obs_data: A pandas DataFrame with the actual component column names.
+
+	Returns:
+	  G_new: The unfolded graph.
+	"""
+	# Build the clustered dictionary
+	clustered = {}
+	for var in clustered_list:
+		components = [col for col in obs_data.columns if col.startswith(var)]
+		try:
+			components.sort(key=lambda x: int(x[len(var):]))
+		except ValueError:
+			components.sort()
+		clustered[var] = components
+	
+	# Unfold the graph using the constructed dictionary
+	G_new = nx.DiGraph() if G.is_directed() else nx.Graph()
+	for node in G.nodes():
+		if node in clustered:
+			for comp in clustered[node]:
+				G_new.add_node(comp)
+		else:
+			G_new.add_node(node)
+	
+	for u, v in G.edges():
+		u_nodes = clustered.get(u, [u])
+		v_nodes = clustered.get(v, [v])
+		for u_comp in u_nodes:
+			for v_comp in v_nodes:
+				G_new.add_edge(u_comp, v_comp)
+	
+	return G_new
+
+

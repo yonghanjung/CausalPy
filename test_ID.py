@@ -51,13 +51,13 @@ if __name__ == "__main__":
 	
 	# Generate the random graph 
 	# seednum = int(time.time())
-	seednum = 12345
+	seednum = 1
 	np.random.seed(seednum)
 	random.seed(seednum)
-	[graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator(num_observables = 6, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 
+	[graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator(num_observables = 4, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 
 																			condition_ID = True, 
 																			condition_BD = True, 
-																			condition_mSBD = False, 
+																			condition_mSBD = True, 
 																			condition_FD = False, 
 																			condition_Tian = False, 
 																			condition_gTian = True, 

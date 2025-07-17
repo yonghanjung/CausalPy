@@ -30,6 +30,20 @@ pd.options.mode.chained_assignment = None  # default='warn'
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during a minimize step, clipping to bounds")
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+def add_cluster_to_vec(cluster_variables, vec):
+	vec_new = []
+	if cluster_variables is not None:
+		for node in vec:
+			if node in cluster_variables:
+				# Expand cluster variable: find columns starting with the node, excluding the node itself
+				expanded = [col for col in obs_data.columns if col.startswith(node) and col != node]
+				# Sort the expanded columns to ensure proper ordering (e.g., C1, C2, C3)
+				expanded_sorted = sorted(expanded, key=lambda x: (len(x), x))
+				vec_new.extend(expanded_sorted)
+			else:
+				vec_new.append(node)
+	return vec_new
+
 def discreteness_checker(G, X, Y, obs_data, tell_me_what_discrete = True):
 	# Function to check if the columns are binary
 	def check_if_binary(obs_data, variables):
@@ -288,7 +302,7 @@ def convert_to_dataframe(data, variable_names, estimator_header=False):
 	return df
 
 
-def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
+def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **kwargs):
 	"""
 	Estimate the Average Treatment Effect (ATE) using the general framework.
 
@@ -428,8 +442,13 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 
 		return Q_roota_next
 
+	cluster_variables = kwargs.get('cluster_variables', None)
+
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
+
+	G0 = copy.copy(G)
+	G = graph.unfold_graph_from_data(G, cluster_variables, obs_data)
 
 	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
 
@@ -578,8 +597,14 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123):
 	return ATE
 
 def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kwargs):
+
+	cluster_variables = kwargs.get('cluster_variables', None)
+
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
+
+	G0 = copy.copy(G)
+	G = graph.unfold_graph_from_data(G, cluster_variables, obs_data)
 
 	topo_V = graph.find_topological_order(G)
 	X = sorted(X, key = lambda x: topo_V.index(x))
@@ -588,6 +613,8 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kw
 	V_SX = sorted( list( set(topo_V) - set(SX) ) , key=lambda x: topo_V.index(x) )	
 	V_XY = sorted( list( set(topo_V) - set(X + Y)), key=lambda x: topo_V.index(x) )	
 	V_Y = sorted( list( set(topo_V) - set(Y)), key=lambda x: topo_V.index(x) )	
+	PA_V_SX = graph.find_parents(G, V_SX)
+	PA_SX_X = graph.find_parents(G, SX_X)
 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
 
@@ -602,7 +629,6 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kw
 			ATE[estimator][tuple(x_val)] = 0
 		for v_minus_XY in obs_data[V_XY].drop_duplicates().itertuples(index=False):
 			# Compute Q[V\SX](v)
-			PA_V_SX = graph.find_parents(G, V_SX)
 			# di is the realization of Di, defined as follow: For a portion Di \intersect D_minus_Y, take its value from d_minus_y. For Di \setminus D_minus_Y, take the value from y_val.
 			v_sx = [
 				getattr(v_minus_XY, variable) if variable in V_XY else y_val[Y.index(variable)]
@@ -618,7 +644,6 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kw
 			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum)
 
 			# Compute Q[SX\X] 
-			PA_SX_X = graph.find_parents(G, SX_X)
 			# di is the realization of Di, defined as follow: For a portion Di \intersect D_minus_Y, take its value from d_minus_y. For Di \setminus D_minus_Y, take the value from y_val.
 			sx_x = [
 				getattr(v_minus_XY, variable) if variable in V_XY else y_val[Y.index(variable)]
@@ -639,8 +664,13 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kw
 	return ATE
 
 def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
+	cluster_variables = kwargs.get('cluster_variables', None)
+
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
+
+	G0 = copy.copy(G)
+	G = graph.unfold_graph_from_data(G, cluster_variables, obs_data)
 
 	topo_V = graph.find_topological_order(G)
 	X = sorted(X, key = lambda x: topo_V.index(x))
@@ -649,6 +679,7 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
 	V_SX = sorted( list( set(topo_V) - set(SX) ) , key=lambda x: topo_V.index(x) )	
 	V_XY = sorted( list( set(topo_V) - set(X + Y)), key=lambda x: topo_V.index(x) )	
 	V_Y = sorted( list( set(topo_V) - set(Y)), key=lambda x: topo_V.index(x) )	
+	PA_V_SX = graph.find_parents(G, V_SX)
 
 	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
 
@@ -691,7 +722,6 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
 			for estimator in list_estimators:
 				Q_VX_val[estimator] = 1 
 			# Compute Q[V\SX](v)
-			PA_V_SX = graph.find_parents(G, V_SX)
 			# di is the realization of Di, defined as follow: For a portion Di \intersect D_minus_Y, take its value from d_minus_y. For Di \setminus D_minus_Y, take the value from y_val.
 			v_sx = [
 				getattr(marginalized_value, variable) if variable in marginalized_item_list else y_val[Y.index(variable)]
@@ -841,7 +871,7 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 		return clip_ATE(ATE)
 
 	else:
-		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM=False)
+		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM=False, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
 
 

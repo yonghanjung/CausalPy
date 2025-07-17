@@ -51,7 +51,7 @@ def check_Generalized_Tian_criterion(G,X):
 	# 1. Union of S_X 
 	for Xi in X: 
 		Ch_Xi_except_X = list( set( graph.find_children(G, [Xi]) ) - set(X) )
-		S_Xi = graph.find_c_components(G, [Xi])
+		S_Xi = graph.find_c_components(G, [Xi]) # c-partition
 		S_Ch_Xi = graph.find_c_components(G, Ch_Xi_except_X)
 		if len(set(S_Xi).intersection(set(S_Ch_Xi))) > 0:
 			return False

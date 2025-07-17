@@ -112,6 +112,55 @@ class StructuralCausalModel:
 
 		return binary_equation
 
+	# --- The new, efficient generation method ---
+	def generate_random_scm(self, num_observables, num_unobservables, num_treatments,
+							num_outcomes, edge_prob=0.5, seed=None, discrete=False):
+		"""
+		Generates a random SCM by first defining a random node order to guarantee acyclicity.
+		"""
+		if seed is not None:
+			random.seed(seed)
+			np.random.seed(seed)
+
+		self.graph.clear()
+		self.equations.clear()
+		self.noise_distributions.clear()
+		self.unobserved_variables.clear()
+
+		treatments = [f'X{i+1}' for i in range(num_treatments)]
+		outcomes = [f'Y{i+1}' for i in range(num_outcomes)]
+		other_observables = [f'V{i+1}' for i in range(num_observables - num_treatments - num_outcomes)]
+		all_observables = treatments + outcomes + other_observables
+
+		random.shuffle(all_observables)
+
+		for i, node_u in enumerate(all_observables):
+			for j, node_v in enumerate(all_observables):
+				if i < j and random.random() < edge_prob:
+					self.graph.add_edge(node_u, node_v)
+
+		for i in range(num_unobservables):
+			if len(all_observables) > 1:
+				obs_pair = random.sample(all_observables, 2)
+				u_var = f'U_{obs_pair[0]}_{obs_pair[1]}'
+				self.add_unobserved_variable(u_var, stats.norm(0, 1))
+				self.graph.add_edge(u_var, obs_pair[0])
+				self.graph.add_edge(u_var, obs_pair[1])
+
+		for var_name in treatments + outcomes + other_observables:
+			parents = list(self.graph.predecessors(var_name))
+			
+			is_binary = discrete or var_name.startswith('X') or var_name.startswith('Y')
+
+			if is_binary:
+				equation = self.create_binary_equation(parents)
+				noise_dist = stats.norm(0, 1)
+			else:
+				equation = self.create_random_linear_equation(parents)
+				noise_dist = stats.norm(0, 0.1)
+
+			self.add_observed_variable(var_name, equation, parents, noise_dist)
+
 	def generate_random_scm_test(self, num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.5, seed = None, discrete = False):
 		'''
 		Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.
@@ -226,27 +275,42 @@ class StructuralCausalModel:
 			# Add unobservable edges
 			unobservable_edges = set()
 			for i in range(num_unobservables):
-				obs_pair = random.sample(all_observables, 2)
-				unobservable = f'U_{"_".join(obs_pair)}'
-				for child in obs_pair:
-					unobservable_edges.add((unobservable, child))
+				if len(all_observables) > 1:
+					obs_pair = random.sample(all_observables, 2)
+					unobservable = f'U_{"_".join(obs_pair)}'
+					for child in obs_pair:
+						unobservable_edges.add((unobservable, child))
 
 			G.add_edges_from(unobservable_edges)
 
 			# Optional: Add additional edges between observables
 			additional_edges = [(a, b) for a in all_observables for b in all_observables if a != b]
 			random.shuffle(additional_edges)
-			additional_edges = random.sample(additional_edges, round(len(additional_edges)*sparcity_constant))
-			for edge in additional_edges:
+			
+			# Ensure the sample size is not larger than the population
+			num_to_sample = round(len(additional_edges) * sparcity_constant)
+			if num_to_sample > len(additional_edges):
+				num_to_sample = len(additional_edges)
+				
+			sampled_edges = random.sample(additional_edges, num_to_sample)
+			
+			for edge in sampled_edges:
 				G.add_edge(*edge)
 				if not nx.is_directed_acyclic_graph(G):
 					G.remove_edge(*edge)
 
 			if nx.is_directed_acyclic_graph(G):
-				if set(outcomes).issubset(set(G.nodes)):
+				if set(outcomes).issubset(set(G.nodes())):
 					break 
 				else:
-					continue
+					# This case can happen if num_outcomes > num_observables
+					# or other edge cases. We ensure outcomes are in the graph.
+					if not set(outcomes).issubset(set(G.nodes())):
+						G.add_nodes_from(outcomes)
+					# Continue if the graph is still not fully formed as desired
+					# This part of logic might need refinement based on exact intent,
+					# but for now, we break if acyclic.
+					break
 
 
 		# Generate node positions for visualization
@@ -339,8 +403,14 @@ if __name__ == "__main__":
 	'''
 	Example usage for generating a random SCM
 	'''
+	num_obs = 4 
+	num_treatments = 1 
+	num_outcomes = 1
+	num_unobs = 2 
+
 	scm = StructuralCausalModel()
-	scm.generate_random_scm(num_unobserved=1, num_observed=4, num_treatments=1, num_outcomes=1)
+	scm.generate_random_scm(num_observables=num_obs, num_unobservables=num_unobs, num_treatments=num_treatments, num_outcomes=num_outcomes)
+	# scm.generate_random_scm(num_unobserved=1, num_observed=4, num_treatments=1, num_outcomes=1)
 	sample_data = scm.generate_samples(100)
 	print(sample_data)
 	scm.visualize()

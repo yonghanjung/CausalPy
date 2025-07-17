@@ -22,8 +22,8 @@ if __name__ == "__main__":
 
 	num_observables = random.randint(5, 15)  # A random integer between 1 and 10
 	num_unobservables = random.randint(0, num_observables)
-	# num_treatments = random.randint(2, int(round(num_observables/2)))
-	num_treatments = 1
+	num_treatments = random.randint(1, int(round(num_observables/2)))
+	# num_treatments = 2
 	num_outcomes = 1
 
 	graph_counter = 0 

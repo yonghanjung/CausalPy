@@ -15,9 +15,15 @@ import tian
 def get_graph_hash(graph):
 	return weisfeiler_lehman_graph_hash(graph)
 
+def directional_dag_hash(G: nx.DiGraph) -> str:
+    """Compute a Weisfeiler-Lehman hash that respects edge direction."""
+    G_copy = nx.DiGraph()
+    for u, v in G.edges():
+        G_copy.add_edge(u, v, direction='forward')  # label direction
+    return weisfeiler_lehman_graph_hash(G_copy, edge_attr='direction')
 
 def is_graph_in_list(new_graph, stored_graph_hashes):
-	new_graph_hash = get_graph_hash(new_graph)
+	new_graph_hash = directional_dag_hash(new_graph)
 	if new_graph_hash in stored_graph_hashes:
 		return True
 	return False
@@ -226,7 +232,7 @@ def Random_Graph_Generator2(num_observables, num_unobservables, num_treatments, 
 		if is_graph_in_list(G, stored_graph_hashes):
 			# print("already checked", same_graph_idx)
 			same_graph_idx += 1 
-			if same_graph_idx > 50000:
+			if same_graph_idx > 500000:
 				print("******* Cannot find a graph with given conditions *******")
 				break 
 			continue
@@ -310,13 +316,13 @@ def Random_Graph_Generator(num_observables, num_unobservables, num_treatments, n
 		if is_graph_in_list(G, stored_graph_hashes):
 			print("already checked", same_graph_idx)
 			same_graph_idx += 1 
-			if same_graph_idx > 50000:
+			if same_graph_idx > 500000:
 				print("******* Cannot find a graph with given conditions *******")
-				break 
+				return 
 			continue
 		else:
 			store_graph.append(G)
-			stored_graph_hashes.add(get_graph_hash(G))
+			stored_graph_hashes.add(directional_dag_hash(G))
 			G0, X0, Y0 = identify.preprocess_GXY_for_ID(G, X, Y)
 			ID_result = identify.ID_return_Ctree(G, X, Y)
 

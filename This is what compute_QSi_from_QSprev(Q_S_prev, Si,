@@ -1,3 +1,0 @@
-This is what compute_QSi_from_QSprev(Q_S_prev, Si, S_prev) is supposed to do. 
-1. Si and S_prev is a list of variables names (e.g., Si = ['X', 'Y'], S_prev = ['X', 'Z', 'Y']). Si is an arbitrary subset of S_prev. 
-2. Q_S_prev is a dictinary, where each key is a possible value of S_prev. For example, if S_prev = ['X', 'Z', 'Y'], then the key is (0,0,0), (0,0,1), ..., (1,1,1) where each element is corresponding to 'X', 'Z' or 'Y'. 

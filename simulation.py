@@ -24,7 +24,6 @@ from scipy.stats import ConstantInputWarning
 
 warnings.filterwarnings("ignore", category=ConstantInputWarning)
 
-
 # Context manager to simulate scenarios
 @contextmanager
 def simulate_scenario(scenario):
@@ -71,14 +70,14 @@ def simulate_scenario(scenario):
 			return original_xgb_predict(model, random_data, col_feature)
 
 		def contimated_predict2(model, data, col_feature):
-			return np.ones(len(data))
+			return 0*np.ones(len(data))
 			# return np.clip(random_data, a_min=0, a_max = None)
 			# random_data = pd.DataFrame(np.random.rand(data.shape[0], data.shape[1]), columns=data.columns)
 			# orig_predict = original_xgb_predict(model, random_data, col_feature)
 			# return np.zeros(len(orig_predict))
 
-		# est_mSBD.xgb_predict = contimated_predict
-		est_mSBD.xgb_predict = contimated_predict2
+		est_mSBD.xgb_predict = contimated_predict
+		# est_mSBD.xgb_predict = contimated_predict2
 
 		yield 
 
@@ -90,11 +89,12 @@ def simulate_scenario(scenario):
 			return np.clip(random_data, a_min=0, a_max = None)
 
 		def contimated_balancing2(obs, x_val, X, Z, col_feature_1, col_feature_2): 
-			random_data = np.zeros(len(obs))
+			# random_data = np.zeros(len(obs))
+			random_data = np.ones(len(obs))*0
 			return np.clip(random_data, a_min=0, a_max = None)
 
-		# statmodules.entropy_balancing_osqp = contimated_balancing
-		statmodules.entropy_balancing_osqp = contimated_balancing2
+		statmodules.entropy_balancing_osqp = contimated_balancing
+		# statmodules.entropy_balancing_osqp = contimated_balancing2
 
 		yield 
 
@@ -141,11 +141,11 @@ def run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, s
 					performance_dict[estimator][num_sample].append( performance_dict_per_seed[estimator] )
 	
 	if pkl_path is not None:
-		result_file_name = pkl_path + "result_"  + filename + ".pkl"
+		result_file_name = pkl_path + "result_"  + filename
 		with open(result_file_name, 'wb') as file:
 			pickle.dump(performance_dict, file)
 		
-		param_file_name = pkl_path + "parameters_" + filename + ".pkl"
+		param_file_name = pkl_path + "parameters_" + filename
 		parameters = {"simulation_round": simulation_round, "list_num_samples": list_num_samples, "list_of_estimators": list_of_estimators, "scenario": scenario, 
 						"seednum": seednum, "scm": scm, "X": X, "Y": Y, "pkl_path": pkl_path, "filename": filename}
 		with open(param_file_name, 'wb') as paramfile:
@@ -222,9 +222,15 @@ def draw_plots(performance_dict, **kwargs):
 	plt.show()
 
 
-def call_examples(example_number, **kwargs):
+def call_examples(seednum, example_number, **kwargs):
 	d = kwargs.get('dim', None)
 	if example_number == 1:
+		# Back-door 
+		scm, X, Y = example_SCM.BD_SCM(seednum = seednum, d=d)	
+		example_name = f'BD_dim_{d}'
+		cluster_variables = ['C']
+
+	elif example_number == 10:
 		# Back-door 
 		scm, X, Y = example_SCM.Kang_Schafer(seednum = seednum)	
 		example_name = 'Kang_Schafer'
@@ -244,8 +250,14 @@ def call_examples(example_number, **kwargs):
 
 	elif example_number == 2:
 		# mSBD
+		scm, X, Y = example_SCM.mSBD_SCM_JCI(seednum = seednum, d=d)	
+		example_name = 'mSBD_JCI'
+		cluster_variables = ['C']
+
+	elif example_number == 20:
+		# mSBD
 		scm, X, Y = example_SCM.mSBD_SCM(seednum = seednum, d=d)	
-		example_name = 'CanonMSBD'
+		example_name = 'MSBD'
 		cluster_variables = ['Z1', 'Z2']
 
 	elif example_number == 21:
@@ -263,40 +275,52 @@ def call_examples(example_number, **kwargs):
 	elif example_number == 3:
 		# Front-door
 		scm, X, Y = example_SCM.FD_SCM(seednum = seednum)	
-		example_name = 'CanonFD'
+		example_name = 'FD'
+		cluster_variables = ['C', 'Z']
+
+	elif example_number == 31:
+		# Front-door
+		scm, X, Y = example_SCM.Fulcher_FD(seednum = seednum)	
+		example_name = 'FulcherFD'
+		cluster_variables = ['C']
 
 	elif example_number == 4: 
 		# PlanID
 		scm, X, Y = example_SCM.Plan_ID_SCM(seednum = seednum)
 		example_name = 'CanonPlanID'
+		cluster_variables = []
 
 	elif example_number == 5: 
 		# Napkin
 		scm, X, Y = example_SCM.Napkin_SCM(seednum = seednum)
-		example_name = 'CanonNapkin'
+		example_name = 'Napkin'
+		cluster_variables = []
 
 	elif example_number == 6: 
 		# Napkin_FD_SCM
 		scm, X, Y = example_SCM.Napkin_FD_SCM(seednum = seednum)
 		example_name = 'CanonNapkinFD'
+		cluster_variables = []
 
 	elif example_number == 7: 
 		# Nested Napkin
 		scm, X, Y = example_SCM.Nested_Napkin_SCM(seednum = seednum)
 		example_name = 'CanonNestedNapkinFD'
+		cluster_variables = []
 
 	elif example_number == 8: 
 		# Nested Napkin
 		scm, X, Y = example_SCM.Double_Napkin_SCM(seednum = seednum)
 		example_name = 'CanonDoubleNapkin'
+		cluster_variables = []
 
 	elif example_number == 9: 
 		# Double-FD-Ratio
 		scm, X, Y = example_SCM.Napkin_FD_v2_SCM(seednum = seednum)
 		example_name = 'CanonRatioFD2'
+		cluster_variables = []
 
 	return scm, X, Y, example_name, cluster_variables
-
 
 def random_scm_experiments(seednum, **kwargs):
 	# Random
@@ -312,13 +336,12 @@ def random_scm_experiments(seednum, **kwargs):
 
 	num_sim = kwargs.get('num_sim', 4)
 	list_of_samples = kwargs.get('list_of_samples', [100, 20000, 50000, 100000])
+	# list_of_samples = kwargs.get('list_of_samples', [50, 100, 200, 500])
 	# num_sample = kwargs.get('num_sample', 1000)
 	simulation_round = kwargs.get('simulation_round', 3)
-	cluster_variables = kwargs.get('cluster_variables', None)
+	cluster_variables = kwargs.get('cluster_variables', {})
 	scenario = kwargs.get('scenario', 2)
-
-	list_of_estimators = ['OM', 'IPW', 'DML']
-
+	list_of_estimators = kwargs.get('list_of_estimators', ['OM', 'IPW', 'DML'])
 	
 	individual_simulation_counter = 0 
 
@@ -371,17 +394,41 @@ def random_scm_experiments(seednum, **kwargs):
 	return performance_dict
 
 if __name__ == "__main__":
+	'''
+	seednum = int(sys.argv[1])
+	simulation_round = int(sys.argv[2])
+	scenario = int(sys.argv[3])
+	example_number = int(sys.argv[4])
+	sim_date = sys.argv[5]
+	sim_time = sys.argv[6]
+	sim_dim = int(sys.argv[7])
+
+	# python3 simulation.py [seednum] [simulation_round] [scenario] [example_number] [sim_date] [sim_time] [sim_dim]
+	'''
+
+	''' 
+	===== BD_SCM =====
+	'''
+	''' scenario 1 '''
+	# python3 simulation.py 190702 100 1 1 250123 1200 10
+	''' scenario 2 '''
+	# python3 simulation.py 190702 100 2 1 250123 1200 10
+	''' scenario 3 '''
+	# python3 simulation.py 190702 100 3 1 250123 1200 10
+	''' scenario 4 '''
+	# python3 simulation.py 190702 100 4 1 250123 1200 10
+
 	''' 
 	===== Kang_Schafer =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 1 241007 1200 1
+	# python3 simulation.py 190702 100 1 10 241007 1200 1
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 1 241007 1200 1
+	# python3 simulation.py 190702 100 2 10 241007 1200 1
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 1 241007 1200 1
+	# python3 simulation.py 190702 100 3 10 241007 1200 1
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 1 241007 1200 1
+	# python3 simulation.py 190702 100 4 10 241007 1200 1
 
 	''' 
 	===== Kang_Schafer dimensional (d=10) =====
@@ -407,18 +454,31 @@ if __name__ == "__main__":
 	''' scenario 4 '''
 	# python3 simulation.py 190702 100 4 12 241007 1200 100
 
+	''' 
+	===== mSBD_JCI =====
+	python3 simulation.py [seednum] [simulation_round] [scenario] [example_number] [sim_date] [sim_time] [sim_dim]
+	'''
+	''' scenario 1 '''
+	# python3 simulation.py 190702 100 1 2 250124 1200 10
+	''' scenario 2 '''
+	# python3 simulation.py 190702 100 2 2 250124 1200 10
+	''' scenario 3 '''
+	# python3 simulation.py 190702 100 3 2 250124 1200 10
+	''' scenario 4 '''
+	# python3 simulation.py 190702 100 4 2 250124 1200 10
+
 
 	''' 
 	===== mSBD =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 2 241007 1500 50
+	# python3 simulation.py 190702 100 1 20 250123 2100 10
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 2 241007 1500 50
+	# python3 simulation.py 190702 100 2 20 250123 2100 10
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 2 241007 1500 50
+	# python3 simulation.py 190702 100 3 20 250123 2100 10
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 2 241007 1500 50
+	# python3 simulation.py 190702 100 4 20 250123 2100 10
 
 	''' 
 	===== Luedtke_v1 =====
@@ -448,153 +508,155 @@ if __name__ == "__main__":
 	===== FD =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 3 240911 0000 
+	# python3 simulation.py 190702 100 1 3 250126 1100 10
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 3 240911 0000 
+	# python3 simulation.py 190702 100 2 3 250126 1100 10
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 3 240911 0000 
+	# python3 simulation.py 190702 100 3 3 250126 1100 10
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 3 240911 0000 
+	# python3 simulation.py 190702 100 4 3 250126 1100 10
+
+	''' 
+	===== Fulcher FD =====
+	'''
+	''' scenario 1 '''
+	# python3 simulation.py 190702 100 1 31 250204 1230 999
+	''' scenario 2 '''
+	# python3 simulation.py 190702 100 2 31 250204 1230 999
+	''' scenario 3 '''
+	# python3 simulation.py 190702 100 3 31 250204 1230 999
+	''' scenario 4 '''
+	# python3 simulation.py 190702 100 4 31 250204 1230 999
 
 	''' 
 	===== PlanID =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 4 240911 0000 
+	# python3 simulation.py 190702 100 1 4 250204 1230 999
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 4 240911 0000 
+	# python3 simulation.py 190702 100 2 4 250204 1230 999
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 4 240911 0000 
+	# python3 simulation.py 190702 100 3 4 250204 1230 999
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 4 240911 0000 
+	# python3 simulation.py 190702 100 4 4 250204 1230 999
 
 	''' 
 	===== Napkin =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 5 240916 0000 
+	# python3 simulation.py 190702 100 1 5 250217 2200 999
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 5 240916 0000 
+	# python3 simulation.py 190702 100 2 5 250217 2200 999
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 5 240916 0000 
+	# python3 simulation.py 190702 100 3 5 250217 2200 999
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 5 240916 0000 
+	# python3 simulation.py 190702 100 4 5 250217 2200 999
 
 	''' 
 	===== Napkin FD =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 6 240911 0000 
+	# python3 simulation.py 190702 100 1 6 250204 1500 999
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 6 240911 0000 
+	# python3 simulation.py 190702 100 2 6 250204 1500 999
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 6 240911 0000 
+	# python3 simulation.py 190702 100 3 6 250204 1500 999
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 6 240911 0000 
+	# python3 simulation.py 190702 100 4 6 250204 1500 999
 
 	''' 
 	===== Nested Napkin =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 7 240916 0000 
+	# python3 simulation.py 190702 100 1 7 250204 1500 999
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 7 240916 0000 
+	# python3 simulation.py 190702 100 2 7 250204 1500 999
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 7 240916 0000 
+	# python3 simulation.py 190702 100 3 7 250204 1500 999
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 7 240916 0000 
+	# python3 simulation.py 190702 100 4 7 250204 1500 999
 
 	''' 
 	===== Double Napkin =====
 	'''
 	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 8 240917 0000 
+	# python3 simulation.py 190702 100 1 8 250204 1900 999
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 8 240917 0000 
+	# python3 simulation.py 190702 100 2 8 250204 1900 999
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 8 240917 0000 
+	# python3 simulation.py 190702 100 3 8 250204 1900 999
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 8 240917 0000 
+	# python3 simulation.py 190702 100 4 8 250204 1900 999
 
 
 	''' 
-	===== Ratio FD2 =====
+	===== Random =====
 	'''
-	''' scenario 1 '''
-	# python3 simulation.py 190702 100 1 9 240917 0000 
 	''' scenario 2 '''
-	# python3 simulation.py 190702 100 2 9 240917 0000 
+	# python3 simulation.py 190702 10 2 0 250601 0000 999
 	''' scenario 3 '''
-	# python3 simulation.py 190702 100 3 9 240917 0000 
+	# python3 simulation.py 190702 10 3 9 250601 0000 999
 	''' scenario 4 '''
-	# python3 simulation.py 190702 100 4 9 240917 0000 
+	# python3 simulation.py 190702 10 4 9 250601 0000 999
 
 
 	''' 
 	===== External (vs. Internal) Variable =====
 	'''
 
-	# seednum = int(sys.argv[1])
-	# simulation_round = int(sys.argv[2])
-	# scenario = int(sys.argv[3])
-	# example_number = int(sys.argv[4])
-	# sim_date = sys.argv[5]
-	# sim_time = sys.argv[6]
-	# sim_dim = int(sys.argv[7])
+	seednum = int(sys.argv[1])
+	simulation_round = int(sys.argv[2])
+	scenario = int(sys.argv[3])
+	example_number = int(sys.argv[4])
+	sim_date = sys.argv[5]
+	sim_time = sys.argv[6]
+	sim_dim = int(sys.argv[7])
 
-	seednum = 190702
-	simulation_round = 10
-	scenario = 3
-	example_number = 21
-	sim_date = 241118
-	sim_time = 1500
-	sim_dim = 4
+	pkl_path = 'log_experiments/pkl/'
+	fig_path = 'log_experiments/plot/'
 
+	pkl_extension = '.pkl'
+	fig_extension = '.png'
 
 	''' 
 	===== Simulation ON (Fixed Graph) =====
 	'''
 
-	# np.random.seed(seednum)
-	# random.seed(seednum)
+	np.random.seed(seednum)
+	random.seed(seednum)
 
-	# list_num_samples = [100, 20000, 50000, 100000]
-	# # list_num_samples = [100, 1000, 10000]
-	# list_of_estimators = ['OM', 'IPW', 'DML']
-	
-	# scm, X, Y, example_name, cluster_variables = call_examples(example_number, dim=sim_dim)
-
-	# pkl_path = 'log_experiments/pkl/'
-	# fig_path = 'log_experiments/plot/'
-
-	# filename = f'{sim_date}{sim_time}_{example_name}_seednum{seednum}_scenario{scenario}_round{simulation_round}'
-
-	# print(f'base_seed: {seednum}, simulation round: {simulation_round}, scenario: {scenario}, example_number: {example_number}, example_name: {example_name}, sim_date_time: {sim_date}_{sim_time}')
-
-	# pkl_extension = '.pkl'
-	# fig_extension = '.png'
-
-	# pkl_filename = filename + pkl_extension
-	# fig_filename = filename + fig_extension
-	# fig_size = (12,8)
-
-	# performance_dict = run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, scenario, seednum, scm, X, Y, pkl_path, pkl_filename, cluster_variables = cluster_variables)
-
-	# if scenario == 1:
-	# 	legend_on = True
-	# else:
-	# 	legend_on = False
-
-	# draw_plots(performance_dict, fig_size = fig_size, fig_path = fig_path, fig_filename = fig_filename, fontsize_xtick = 30, fontsize_ytick = 30, legend_on = legend_on)
-
-
-	''' 
-	===== Random Simulation  =====
-	'''
-
-	seednum = 190702
-	num_sim = 10
-	simulation_round = 10
 	list_num_samples = [100, 20000, 50000, 100000]
-	performance_dict = random_scm_experiments(seednum = seednum, num_sim = num_sim, simulation_round = simulation_round, list_num_samples = list_num_samples)
+	list_of_estimators = ['OM', 'IW', 'DML']
+	
+	if example_number != 0: # Non random
+		scm, X, Y, example_name, cluster_variables = call_examples(seednum, example_number, dim=sim_dim)
 
+		filename = f'FixedSim_{sim_date}{sim_time}_{example_name}_seednum{seednum}_scenario{scenario}_round{simulation_round}'
+
+		print(f'base_seed: {seednum}, simulation round: {simulation_round}, scenario: {scenario}, example_number: {example_number}, example_name: {example_name}, sim_date_time: {sim_date}_{sim_time}')
+
+		pkl_filename = filename + pkl_extension
+		fig_filename = filename + fig_extension
+		fig_size = (12,8)
+
+		performance_dict = run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, scenario, seednum, scm, X, Y, pkl_path, pkl_filename, cluster_variables = cluster_variables)
+
+	if example_number == 0: 
+		num_sim = simulation_round
+		filename = f'RandomSim_{sim_date}{sim_time}_seednum{seednum}_scenario{scenario}_round{simulation_round}_numsim{num_sim}'
+		pkl_filename = filename + pkl_extension
+		fig_filename = filename + fig_extension
+
+		print(f'Random simulation with base_seed: {seednum}, simulation round: {simulation_round}, sim_date_time: {sim_date}_{sim_time}')
+		performance_dict = random_scm_experiments(seednum = seednum, num_sim = num_sim, simulation_round = simulation_round, list_num_samples = list_num_samples, scenario = scenario)
+
+		result_file_name = pkl_path + "result_"  + filename + ".pkl"
+		with open(result_file_name, 'wb') as file:
+			pickle.dump(performance_dict, file)
+		
+		param_file_name = pkl_path + "parameters_" + filename + ".pkl"
+		parameters = {"scenario": scenario,"simulation_round": simulation_round, "list_num_samples": list_num_samples, "list_of_estimators": list_of_estimators,
+						"seednum": seednum, "pkl_path": pkl_path, "filename": filename}
+		with open(param_file_name, 'wb') as paramfile:
+			pickle.dump(parameters, paramfile)
+	
