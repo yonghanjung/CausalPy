@@ -161,6 +161,7 @@ class StructuralCausalModel:
 
 			self.add_observed_variable(var_name, equation, parents, noise_dist)
 
+	# Legacy 
 	def generate_random_scm_test(self, num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.5, seed = None, discrete = False):
 		'''
 		Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.
@@ -244,79 +245,72 @@ class StructuralCausalModel:
 				else:
 					continue
 
-	def generate_random_graph(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.25, seednum = 123):
-		'''
-		Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.
+	def generate_random_graph(self, num_observables, num_unobservables, num_treatments, 
+							  num_outcomes, edge_prob=0.5, seed=None):
+		"""
+		Efficiently generates a random Acyclic Directed Mixed Graph (ADMG) by construction.
+
+		This function first defines a random topological order for the observable nodes
+		to guarantee the resulting directed graph is acyclic. It then adds unobserved
+		confounders. This method is much more efficient than trial-and-error.
 
 		Parameters:
-		num_observables (int): Number of observable nodes.
-		num_unobservables (int): Number of unobservable nodes.
-		num_treatments (int): Number of treatment variables.
-		num_outcomes (int): Number of outcome variables.
+		num_observables (int): Total number of observable nodes.
+		num_unobservables (int): Number of unobserved confounders to add.
+		num_treatments (int): Number of treatment variables (X).
+		num_outcomes (int): Number of outcome variables (Y).
+		edge_prob (float): The probability of creating a directed edge between any two valid nodes.
+						   This replaces the less direct `sparcity_constant`.
+		seed (int, optional): Random seed for reproducibility.
 
 		Returns:
-		tuple: Graph dictionary, node positions, lists X and Y.
-		'''
+		list: A list containing [graph_dict, node_positions, treatments, outcomes].
+		"""
+		if seed is not None:
+			random.seed(seed)
+			np.random.seed(seed)
 
-		np.random.seed(seednum)
-		random.seed(seednum)
-
-		# Create observable nodes
+		# 1. Define all observable nodes
 		treatments = [f'X{i+1}' for i in range(num_treatments)]
 		outcomes = [f'Y{i+1}' for i in range(num_outcomes)]
 		other_observables = [f'V{i+1}' for i in range(num_observables - num_treatments - num_outcomes)]
-
 		all_observables = treatments + outcomes + other_observables
-		is_acyclic = False
 
-		while not is_acyclic:
-			G = nx.DiGraph()
+		# 2. Establish a random topological ordering to guarantee acyclicity
+		random.shuffle(all_observables)
+		
+		# Initialize the graph and add all observable nodes
+		G = nx.DiGraph()
+		G.add_nodes_from(all_observables)
 
-			# Add unobservable edges
-			unobservable_edges = set()
-			for i in range(num_unobservables):
-				if len(all_observables) > 1:
-					obs_pair = random.sample(all_observables, 2)
-					unobservable = f'U_{"_".join(obs_pair)}'
-					for child in obs_pair:
-						unobservable_edges.add((unobservable, child))
+		# 3. Add directed edges based on the ordering (guarantees a DAG)
+		for i, node_u in enumerate(all_observables):
+			for j, node_v in enumerate(all_observables):
+				# Only add edges from nodes that appear earlier in the shuffled list
+				# to nodes that appear later. This prevents cycles.
+				if i < j:
+					if random.random() < edge_prob:
+						G.add_edge(node_u, node_v)
 
-			G.add_edges_from(unobservable_edges)
-
-			# Optional: Add additional edges between observables
-			additional_edges = [(a, b) for a in all_observables for b in all_observables if a != b]
-			random.shuffle(additional_edges)
-			
-			# Ensure the sample size is not larger than the population
-			num_to_sample = round(len(additional_edges) * sparcity_constant)
-			if num_to_sample > len(additional_edges):
-				num_to_sample = len(additional_edges)
+		# 4. Add unobserved confounders
+		for i in range(num_unobservables):
+			if len(all_observables) > 1:
+				# Randomly select two observable nodes to be confounded
+				obs_pair = random.sample(all_observables, 2)
 				
-			sampled_edges = random.sample(additional_edges, num_to_sample)
-			
-			for edge in sampled_edges:
-				G.add_edge(*edge)
-				if not nx.is_directed_acyclic_graph(G):
-					G.remove_edge(*edge)
+				# Create a unique name for the unobserved node
+				u_var = f'U_{obs_pair[0]}_{obs_pair[1]}'
+				
+				# Add the unobserved node and its edges to the two observables
+				G.add_node(u_var)
+				G.add_edge(u_var, obs_pair[0])
+				G.add_edge(u_var, obs_pair[1])
 
-			if nx.is_directed_acyclic_graph(G):
-				if set(outcomes).issubset(set(G.nodes())):
-					break 
-				else:
-					# This case can happen if num_outcomes > num_observables
-					# or other edge cases. We ensure outcomes are in the graph.
-					if not set(outcomes).issubset(set(G.nodes())):
-						G.add_nodes_from(outcomes)
-					# Continue if the graph is still not fully formed as desired
-					# This part of logic might need refinement based on exact intent,
-					# but for now, we break if acyclic.
-					break
-
-
+		# 5. Generate final outputs in the required format
 		# Generate node positions for visualization
 		node_positions = {node: (random.uniform(0, 100), random.uniform(0, 100)) for node in G.nodes()}
 
-		# Convert graph to dictionary format
+		# Convert graph to dictionary format (adjacency list)
 		graph_dict = {node: list(G.successors(node)) for node in G.nodes()}
 
 		return [graph_dict, node_positions, treatments, outcomes]
@@ -414,6 +408,15 @@ if __name__ == "__main__":
 	sample_data = scm.generate_samples(100)
 	print(sample_data)
 	scm.visualize()
+ 
+	graph_data = scm.generate_random_graph(
+			num_observables=10,
+			num_unobservables=3,
+			num_treatments=2,
+			num_outcomes=2,
+			edge_prob=0.4,
+			seed=42
+		)
 
 	'''
 	Example for creating the data geneating process
