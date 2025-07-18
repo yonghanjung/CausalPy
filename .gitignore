@@ -1,7 +1,8 @@
-archived/*
+archived/
 *.pyc
 .DS_Store
 *.pkl
 *.png
-DevDoc/*
-log_experiments/*
+DevDoc/
+log_experiments/
+*.json
