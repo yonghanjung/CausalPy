@@ -1,3 +1,4 @@
+import numpy as np 
 import networkx as nx
 import matplotlib.pyplot as plt
 import random
@@ -362,65 +363,80 @@ def G_cut_outgoing_edges(G, X):
 	return G_modified
 
 
-def generate_random_graph(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant = 0.25):
-	'''
-	Generate a random acyclic graph with specified numbers of observables, unobservables, treatments, and outcomes.
+def generate_random_graph(num_observables, num_unobservables, num_treatments, 
+                          num_outcomes, sparcity_constant=0.25, seednum=123):
+    """
+    Efficiently generates a random Acyclic Directed Mixed Graph (ADMG) by construction.
 
-	Parameters:
-	num_observables (int): Number of observable nodes.
-	num_unobservables (int): Number of unobservable nodes.
-	num_treatments (int): Number of treatment variables.
-	num_outcomes (int): Number of outcome variables.
+    This function first defines a random topological order for the observable nodes
+    to guarantee the resulting directed graph is acyclic. It then adds unobserved
+    confounders. This method is much more efficient than trial-and-error.
 
-	Returns:
-	tuple: Graph dictionary, node positions, lists X and Y.
-	'''
+    Parameters:
+    num_observables (int): Total number of observable nodes.
+    num_unobservables (int): Number of unobserved confounders to add.
+    num_treatments (int): Number of treatment variables (X).
+    num_outcomes (int): Number of outcome variables (Y).
+    sparcity_constant (float): Used to determine the probability of an edge.
+    seednum (int, optional): Random seed for reproducibility.
 
-	# Create observable nodes
-	treatments = [f'X{i+1}' for i in range(num_treatments)]
-	outcomes = [f'Y{i+1}' for i in range(num_outcomes)]
-	other_observables = [f'V{i+1}' for i in range(num_observables - num_treatments - num_outcomes)]
+    Returns:
+    list: A list containing [graph_dict, node_positions, treatments, outcomes].
+    """
+    if seednum is not None:
+        random.seed(seednum)
+        np.random.seed(seednum)
 
-	all_observables = treatments + outcomes + other_observables
-	is_acyclic = False
+    # 1. Define all observable nodes
+    treatments = [f'X{i+1}' for i in range(num_treatments)]
+    outcomes = [f'Y{i+1}' for i in range(num_outcomes)]
+    other_observables = [f'V{i+1}' for i in range(num_observables - num_treatments - num_outcomes)]
+    all_observables = treatments + outcomes + other_observables
 
-	while not is_acyclic:
-		G = nx.DiGraph()
+    # 2. Establish a random topological ordering to guarantee acyclicity
+    random.shuffle(all_observables)
+    
+    # Initialize the graph and add all observable nodes
+    G = nx.DiGraph()
+    G.add_nodes_from(all_observables)
 
-		# Add unobservable edges
-		unobservable_edges = set()
-		for i in range(num_unobservables):
-			obs_pair = random.sample(all_observables, 2)
-			unobservable = f'U_{"_".join(obs_pair)}'
-			for child in obs_pair:
-				unobservable_edges.add((unobservable, child))
+    # Convert sparcity_constant to an equivalent edge probability.
+    # The original method considered d*(d-1) possible edges, while this constructive
+    # method considers d*(d-1)/2 possible edges. So, we double the probability
+    # to maintain the same expected number of edges.
+    edge_prob = min(sparcity_constant * 2, 1.0)
 
-		G.add_edges_from(unobservable_edges)
+    # 3. Add directed edges based on the ordering (guarantees a DAG)
+    for i, node_u in enumerate(all_observables):
+        for j, node_v in enumerate(all_observables):
+            # Only add edges from nodes that appear earlier in the shuffled list
+            # to nodes that appear later. This prevents cycles.
+            if i < j:
+                if random.random() < edge_prob:
+                    G.add_edge(node_u, node_v)
 
-		# Optional: Add additional edges between observables
-		additional_edges = [(a, b) for a in all_observables for b in all_observables if a != b]
-		random.shuffle(additional_edges)
+    # 4. Add unobserved confounders
+    for i in range(num_unobservables):
+        if len(all_observables) > 1:
+            # Randomly select two observable nodes to be confounded
+            obs_pair = random.sample(all_observables, 2)
+            
+            # Create a unique name for the unobserved node
+            u_var = f'U_{obs_pair[0]}_{obs_pair[1]}'
+            
+            # Add the unobserved node and its edges to the two observables
+            G.add_node(u_var)
+            G.add_edge(u_var, obs_pair[0])
+            G.add_edge(u_var, obs_pair[1])
 
-		additional_edges = random.sample(additional_edges, round(len(additional_edges)*sparcity_constant))
-		for edge in additional_edges:
-			G.add_edge(*edge)
-			if not nx.is_directed_acyclic_graph(G):
-				G.remove_edge(*edge)
+    # 5. Generate final outputs in the required format
+    # Generate node positions for visualization
+    node_positions = {node: (random.uniform(0, 100), random.uniform(0, 100)) for node in G.nodes()}
 
-		if nx.is_directed_acyclic_graph(G):
-			if set(outcomes).issubset(set(G.nodes)):
-				break 
-			else:
-				continue
+    # Convert graph to dictionary format (adjacency list)
+    graph_dict = {node: list(G.successors(node)) for node in G.nodes()}
 
-
-	# Generate node positions for visualization
-	node_positions = {node: (random.uniform(0, 100), random.uniform(0, 100)) for node in G.nodes()}
-
-	# Convert graph to dictionary format
-	graph_dict = {node: list(G.successors(node)) for node in G.nodes()}
-
-	return [graph_dict, node_positions, treatments, outcomes]
+    return [graph_dict, node_positions, treatments, outcomes]
 
 def find_reacheable_set(G, X, A, Z):
 	'''
@@ -644,3 +660,30 @@ def unfold_graph_from_data(G, clustered_list, obs_data):
 	return G_new
 
 
+# --- Example Usage (can be added to the bottom of graph.py for testing) ---
+if __name__ == '__main__':
+    print("--- Testing the efficient generate_random_graph function ---")
+    
+    # Generate a graph
+    graph_data = generate_random_graph(
+        num_observables=15,
+        num_unobservables=4,
+        num_treatments=2,
+        num_outcomes=2,
+        sparcity_constant=0.15, # Equivalent to edge_prob=0.3
+        seednum=101
+    )
+    
+    graph_dict, positions, treatments, outcomes = graph_data
+    
+    print("\nGenerated Treatments:", treatments)
+    print("Generated Outcomes:", outcomes)
+    
+    # Verify acyclicity by reconstructing the graph from the dictionary
+    G_reconstructed = nx.DiGraph(graph_dict)
+
+    is_acyclic = nx.is_directed_acyclic_graph(G_reconstructed)
+    print(f"\nIs the full generated graph acyclic? {'Yes' if is_acyclic else 'No'}")
+    
+    print(f"Total nodes in graph: {len(G_reconstructed.nodes())}")
+    print(f"Total edges in graph: {len(G_reconstructed.edges())}")
