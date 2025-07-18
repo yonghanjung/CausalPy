@@ -86,40 +86,105 @@ def Kang_Schafer(seednum = None):
 	Y = ['Y']
 	return [scm, X, Y]
 
-def Kang_Schafer_dim(seednum = None, d=4):
+def CCDDHNR2018_PLR(seednum = None, d=20, **kwargs):
+	num_samples = kwargs.pop('num_sample')
+	
+	theta = kwargs.get('theta', 0.5)
+	a0 = kwargs.get('a0', 1.0)
+	a1 = kwargs.get('a1', 0.25)
+	b0 = kwargs.get('b0', 1.0)
+	b1 = kwargs.get('b1', 0.25)
+	s1 = kwargs.get('s1', 1.0)
+	s2 = kwargs.get('s2', 1.0)
+	
 	if seednum is not None: 
 		random.seed(int(seednum))
 		np.random.seed(seednum)
+		rng = np.random.default_rng(seednum)
+	else:
+		random.seed(123)
+		np.random.seed(123)
+		rng = np.random.default_rng(123)
 
-	def equation_Z(**kwargs):
-		num_samples = kwargs.get('num_sample', None)
-		return stats.multivariate_normal.rvs(mean = np.zeros(d), cov = np.eye(d), size=num_samples)
+	# Σ with exponential decay 0.7^{|k-j|}
+	Sigma = toeplitz(0.7 ** np.arange(d))
+	X = stats.multivariate_normal.rvs(mean = np.zeros(d), cov = Sigma, size=num_samples)
+	
+ 	# Nuisance functions
+	def m0(x):
+		return a0 * x[..., 0] + a1 * np.exp(x[..., 2]) / (1.0 + np.exp(x[..., 2]))
 
-	def equation_X(Z, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
+	def g0(x):
+		return b0 * np.exp(x[..., 0]) / (1.0 + np.exp(x[..., 0])) + b1 * x[..., 2]
+	
+	v = rng.normal(scale=s1, size=num_samples)
+	D = m0(X) + v
 
-		# coeff = [27.4] + [13.7] * (len(Z_list)-1) 
-		coeff = np.array( [(-1)**n * 2**(-n) for n in range(1, d + 1)] )
-		X_agg = np.dot(np.array(Z), coeff.T)  # Compute dot product
-		prob_X = inv_logit(X_agg)
-		return np.random.binomial(1, prob_X)
+	zeta = rng.normal(scale=s2, size=num_samples)
+	Y = theta * D + g0(X) + zeta
 
-	def equation_Y(Z, X, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
+	return X, D, Y
 
-		coeff = np.array( [27.4] + [13.7] * (d - 1) )
-		Y_agg = np.dot(np.array(Z), coeff.T)  # Compute dot product
-		Y = 210 + X*Y_agg + noise
-		return Y
+def CCDDHNR2018_IRM(seednum=None, **kwargs):
+    """
+    Binary‑treatment Interactive‑Regression‑Model (IRM) generator from
+    Chernozhukov et al. (2018, App. P), written in the same style as
+    `CCDDHNR2018_PLR`.
 
-	scm = StructuralCausalModel()
-	scm.add_observed_variable('Z', equation_Z, [], stats.norm(0, 0.1))
-	scm.add_observed_variable('X', equation_X, ['Z'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y', equation_Y, ['Z','X'], stats.norm(0, 0.1))
+    Required keyword argument
+    -------------------------
+    num_sample : int
+        Sample size n.
 
-	X = ['X']
-	Y = ['Y']
-	return [scm, X, Y]
+    Optional keyword arguments (with defaults)
+    ------------------------------------------
+    theta   : float, causal effect               (default 0.5)
+    R2_d    : float, targeted R² for treatment   (default 0.5)
+    R2_y    : float, targeted R² for outcome     (default 0.5)
+    corr    : float, base correlation ρ in Σ     (default 0.5)
+    """
+
+    num_samples = kwargs.pop('num_sample')           # required
+    d = kwargs.get('d', 20)
+    theta  = kwargs.get('theta', 0.5)
+    R2_d   = kwargs.get('R2_d', 0.5)
+    R2_y   = kwargs.get('R2_y', 0.5)
+    corr   = kwargs.get('corr', 0.5)
+
+    # ---------- random‑seed handling ----------------------------------------
+    if seednum is not None:
+        random.seed(int(seednum))
+        np.random.seed(seednum)
+        rng = np.random.default_rng(seednum)
+    else:
+        random.seed(123)
+        np.random.seed(123)
+        rng = np.random.default_rng(123)
+
+    # ---------- covariates X -------------------------------------------------
+    Sigma = toeplitz(corr ** np.arange(d))                         # Σ_{kj}=ρ^{|k-j|}
+    X = stats.multivariate_normal.rvs(mean=np.zeros(d),
+                                      cov=Sigma,
+                                      size=num_samples)
+
+    # ---------- coefficient vector β_j = 1/j² -------------------------------
+    beta = 1.0 / (np.arange(1, d + 1) ** 2)
+    beta_Sig_beta = beta @ Sigma @ beta
+
+    # ---------- scale factors to hit desired R² -----------------------------
+    c_d = np.sqrt((np.pi**2 / 3) * R2_d / ((1 - R2_d) * beta_Sig_beta))
+    c_y = np.sqrt(R2_y / ((1 - R2_y) * beta_Sig_beta))
+
+    # ---------- treatment D ~ Bernoulli(p) ----------------------------------
+    logits = c_d * (X @ beta)                    # linear index → log‑odds
+    p = 1.0 / (1.0 + np.exp(-logits))
+    D = rng.binomial(1, p, size=num_samples)     # {0,1}
+
+    # ---------- outcome Y ----------------------------------------------------
+    zeta = rng.normal(size=num_samples)
+    Y = theta * D + c_y * (X @ beta) + zeta
+
+    return X, D, Y
 
 def Dukes_Vansteelandt_Farrel(seednum = None, d=200):
 	# Inference for treatment effect parameters in potentially misspecified high-dimensional models
@@ -156,116 +221,6 @@ def Dukes_Vansteelandt_Farrel(seednum = None, d=200):
 	Y = ['Y']
 	return [scm, X, Y]
 
-# def mSBD_SCM_timestep(seednum=None, d=4, time_step=3):
-# 	if seednum is not None:
-# 		random.seed(int(seednum))
-# 		np.random.seed(seednum)
-
-# 	scm = StructuralCausalModel()
-# 	prev_lists = []
-
-# 	for t in range(1, time_step + 1):
-# 		# Define Z equations
-# 		def make_equation_Z(prev_lists, noise, **kwargs):
-# 			num_samples = kwargs.get('num_sample', None)
-# 			starting_nvec = np.zeros(num_samples)
-# 			Zt = stats.multivariate_normal.rvs(mean=np.zeros(d), cov=np.eye(d), size=num_samples)
-
-# 			coeffs = [-(i) ** (-2) for i in range(1, d + 1)]
-# 			coeff2 = 2
-
-# 			for prev_var in prev_lists:
-# 				prev_var = scm.sample_dict[prev_var]
-# 				if len(prev_var.shape) == 2:
-# 					mean_Z = np.dot(np.array(starting_nvec).T, np.array(prev_var))
-# 					mean_Z = (np.max(mean_Z) - mean_Z) / (np.max(mean_Z) - np.min(mean_Z))
-# 					Zt += stats.multivariate_normal.rvs(mean=mean_Z, cov=np.eye(d), size=num_samples)
-# 				else:
-# 					starting_nvec += (coeff2 ** -2) * prev_var
-# 					coeff2 += 2
-
-# 			Zt = (np.max(Zt) - Zt) / (np.max(Zt) - np.min(Zt))
-# 			return Zt
-
-# 		if t == 1:
-# 			parents = []
-# 			def equation_Z_wrapper(**kwargs):
-# 				return make_equation_Z(parents, **kwargs)
-# 			scm.add_observed_variable(f'Z{t}', equation_Z_wrapper, [], stats.norm(0, 0.1))
-# 		else:
-# 			parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
-# 			def equation_Z_wrapper(**kwargs):
-# 				local_parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
-# 				return make_equation_Z(local_parents, **kwargs)
-# 			scm.add_observed_variable(f'Z{t}', equation_Z_wrapper, parents, stats.norm(0, 0.1))
-
-# 		prev_lists.append(f'Z{t}')
-
-# 		# Define X equations
-# 		def make_equation_X(prev_lists, noise, t=t, **kwargs):
-# 			num_samples = kwargs.get('num_sample', None)
-# 			starting_nvec = np.zeros(num_samples)
-# 			coeffs = [-(i) ** (-2) for i in range(1, d + 1)]
-# 			coeff2 = 2
-
-# 			for prev_var in prev_lists:
-# 				prev_var = scm.sample_dict[prev_var]
-# 				if len(prev_var.shape) == 2:
-# 					starting_nvec += np.dot(np.array(coeffs), np.array(prev_var).T)
-# 				else:
-# 					starting_nvec += (coeff2 ** -2) * prev_var
-# 					coeff2 += 2
-
-# 			starting_nvec = (np.max(starting_nvec) - starting_nvec) / (np.max(starting_nvec) - np.min(starting_nvec))
-# 			prob = inv_logit(starting_nvec)
-# 			return np.random.binomial(1, prob)
-
-# 		parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
-# 		parents.append(f'Z{t}')
-# 		def equation_X_wrapper(**kwargs):
-# 			local_parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
-# 			local_parents.append(f'Z{t}')
-# 			return make_equation_X(local_parents, **kwargs)
-# 		scm.add_observed_variable(f'X{t}', equation_X_wrapper, parents, stats.norm(0, 0.1))
-
-# 		prev_lists.append(f'X{t}')
-
-# 		# Define Y equations
-# 		def make_equation_Y(prev_lists, noise, t=t, **kwargs):
-# 			num_samples = kwargs.get('num_sample', None)
-# 			starting_nvec = np.zeros(num_samples)
-# 			coeffs = [-(i) ** (-2) for i in range(1, d + 1)]
-# 			coeff2 = 2
-
-# 			for prev_var in prev_lists:
-# 				prev_var = scm.sample_dict[prev_var]
-# 				if len(prev_var.shape) == 2:
-# 					starting_nvec += np.dot(np.array(coeffs), np.array(prev_var).T)
-# 				else:
-# 					starting_nvec += (coeff2 ** -0.5) * prev_var
-# 					coeff2 += 2
-
-# 			starting_nvec = (np.max(starting_nvec) - starting_nvec) / (np.max(starting_nvec) - np.min(starting_nvec))
-# 			prob = inv_logit(starting_nvec)
-# 			return np.random.binomial(1, prob)
-
-# 		parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
-# 		parents.append(f'Z{t}')
-# 		parents.append(f'X{t}')
-# 		def equation_Y_wrapper(**kwargs):
-# 			local_parents = [f"{var}{i}" for i in range(1, t) for var in ['Z', 'X', 'Y']]
-# 			local_parents.append(f'Z{t}')
-# 			local_parents.append(f'X{t}')
-# 			return make_equation_Y(local_parents, **kwargs)
-# 		scm.add_observed_variable(f'Y{t}', equation_Y_wrapper, parents, stats.norm(0, 0.1))
-		
-# 		prev_lists.append(f'Y{t}')
-
-# 	# Collect all X and Y variables based on the time step
-# 	X = [f'X{t}' for t in range(1, time_step + 1)]
-# 	Y = [f'Y{t}' for t in range(1, time_step + 1)]
-
-# 	return [scm, X, Y]
 
 def mSBD_SCM_JCI(seednum = None, d=4):
 	if seednum is not None: 
