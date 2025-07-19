@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from scipy.linalg import toeplitz
 from scipy.special import expit
-from pyvis.network import Network
 
 
 from SCM import StructuralCausalModel  # Ensure generateSCM.py is in the same directory
@@ -564,6 +563,82 @@ def FD_SCM(seednum = None, dC = 3, dZ = 2):
 
 	return [scm, X, Y]
 
+def Bhattacharya2022_Fig2b_SCM(seednum=None, **kwargs):
+    """
+    Python implementation of the data generating process for the ADMG in Figure 2(b)
+    [cite_start]from Bhattacharya, Nabi, and Shpitser (2022, Appendix G)[cite: 1128, 1129, 1130, 1131, 1132].
+    """
+    if seednum is not None:
+        random.seed(int(seednum))
+        np.random.seed(seednum)
+
+    # --- Structural Equations for Hidden Variables (U) ---
+    # These are defined by their distributions and added to the SCM.
+
+    # --- Structural Equations for Observed Variables ---
+    def equation_C1(noise, **kwargs): return np.random.binomial(1, 0.3, kwargs.get('num_sample'))
+    def equation_C2(noise, **kwargs): return np.random.uniform(-1, 2, kwargs.get('num_sample'))
+    def equation_C3(noise, **kwargs): return np.random.normal(1, 1, kwargs.get('num_sample'))
+
+    def equation_X(C1, C2, C3, U1, U2, U3, noise, **kwargs):
+        C4 = stats.norm.cdf(C3)
+        C5 = C3**C1 + (1 - C1) * np.sin(np.abs(C3) * np.pi)
+        C6 = C1 * C2 + np.abs(C3)
+        logits = 0.5 + 0.9 * C4 - 0.5 * C5 + 0.2 * C6 + 0.3 * U1 - 0.8 * U2 + 0.8 * U3
+        prob = expit(logits)
+        return np.random.binomial(1, prob)
+
+    def equation_M(C1, C2, C3, X, U4, U5, U6, noise, **kwargs):
+        C4 = stats.norm.cdf(C3)
+        C5 = C3**C1 + (1 - C1) * np.sin(np.abs(C3) * np.pi)
+        C6 = C1 * C2 + np.abs(C3)
+        logits = (0.5 - 0.7*C1 + 0.8*C2 - C3 - 1.2*X - 0.2*U4 + 0.5*U5 + 0.4*U6
+                  + (1.5*C4 + 1.2*C5 + 0.6*C6) * X)
+        prob = expit(logits)
+        return np.random.binomial(1, prob)
+
+    def equation_L(C1, C2, C3, M, X, U1, U2, U3, noise, **kwargs):
+        # Note: L depends on T through M. Added T to parents for clarity.
+        C4 = stats.norm.cdf(C3)
+        C5 = C3**C1 + (1 - C1) * np.sin(np.abs(C3) * np.pi)
+        C6 = C1 * C2 + np.abs(C3)
+        logits = (-0.5*X + 0.8*C4 + 1.2*C5 - 0.6*C6 - 1.2*M + 0.3*U1 + 0.6*U2 - 0.4*U3
+                  - (0.8*C4 + 1.5*C5 + 0.4*C6) * M)
+        prob = expit(logits)
+        return np.random.binomial(1, prob)
+
+    def equation_Y(C1, C2, C3, X, L, U4, U5, U6, noise, **kwargs):
+        C4 = stats.norm.cdf(C3)
+        C5 = C3**C1 + (1 - C1) * np.sin(np.abs(C3) * np.pi)
+        C6 = C1 * C2 + np.abs(C3)
+        mean = (0.5 + 0.5*C4 - 2*C5 + 0.8*C6 + 0.5*X + 0.6*L - 0.6*U4 + 0.5*U5
+                - 0.5*U6 + 1.3*C4*X + 2.3*C5*L + 2*C6*X*L + 1.2*X*L)
+        return mean + noise
+
+    # --- SCM Construction ---
+    scm = StructuralCausalModel()
+    # Add unobserved (hidden) variables
+    scm.add_unobserved_variable('U1', stats.bernoulli(0.4))
+    scm.add_unobserved_variable('U2', stats.uniform(0, 1.5))
+    scm.add_unobserved_variable('U3', stats.norm(0, 1))
+    scm.add_unobserved_variable('U4', stats.bernoulli(0.6))
+    scm.add_unobserved_variable('U5', stats.uniform(-1, 2)) # scale = 1 - (-1) = 2
+    scm.add_unobserved_variable('U6', stats.norm(0, 1.5))
+
+    # Add observed variables
+    scm.add_observed_variable('C1', equation_C1, [], stats.norm(0, 0.1)) # Placeholder noise
+    scm.add_observed_variable('C2', equation_C2, [], stats.norm(0, 0.1))
+    scm.add_observed_variable('C3', equation_C3, [], stats.norm(0, 0.1))
+    scm.add_observed_variable('X', equation_X, ['C1', 'C2', 'C3', 'U1', 'U2', 'U3'], stats.norm(0, 0.1))
+    scm.add_observed_variable('M', equation_M, ['C1', 'C2', 'C3', 'X', 'U4', 'U5', 'U6'], stats.norm(0, 0.1))
+    scm.add_observed_variable('L', equation_L, ['C1', 'C2', 'C3', 'M', 'X', 'U1', 'U2', 'U3'], stats.norm(0, 0.1))
+    scm.add_observed_variable('Y', equation_Y, ['C1', 'C2', 'C3', 'X', 'L', 'U4', 'U5', 'U6'], stats.norm(0, 1.5))
+ 
+    X = ['X']
+    Y = ['Y']
+    return [scm, X, Y]
+
+
 def Napkin_SCM(seednum = None):
 	if seednum is not None: 
 		random.seed(int(seednum))
@@ -967,5 +1042,5 @@ def Plan_ID_SCM(seednum = None):
 	return [scm, X, Y]
 
 if __name__ == "__main__":
-    [scm, X, Y] = luedtke_2017_sim1_scm(num_sample = 10000, d= 100)
+    [scm, X, Y] = Bhattacharya2022_Fig2b_SCM(num_sample = 10000, d= 100)
     sample_data = scm.generate_samples(100)
