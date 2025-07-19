@@ -639,6 +639,66 @@ def Bhattacharya2022_Fig2b_SCM(seednum=None, **kwargs):
     return [scm, X, Y]
 
 
+def Bhattacharya2022_Fig3_SCM(seednum=None, **kwargs):
+    """
+    Python implementation for the ADMG in Figure 3 from Bhattacharya et al. (2022).
+    - Treatment is named 'X'.
+    - Unmeasured confounders are named 'U_#'.
+    """
+    if seednum is not None:
+        random.seed(int(seednum))
+        np.random.seed(seednum)
+
+    # --- Structural Equations for Observed Variables ---
+    def equation_C11(noise, **kwargs): return np.random.normal(1, 1, kwargs.get('num_sample'))
+    def equation_C12(noise, **kwargs): return np.random.uniform(-1, 1, kwargs.get('num_sample'))
+    def equation_C21(noise, **kwargs): return np.random.normal(0, 1, kwargs.get('num_sample'))
+    def equation_C22(noise, **kwargs): return np.random.binomial(1, 0.4, kwargs.get('num_sample'))
+
+    def equation_X(C11, C12, C21, C22, U_1, U_2, U_3, noise, **kwargs):
+        C3 = stats.norm.cdf(C11 * C12) + (1 - C12) * np.sin(np.abs(C11) * np.pi)
+        C4 = (C21**C22) + (1 - C22) * np.sin(np.abs(C21) * np.pi)
+        logits = (-0.5 + 0.9*C11 - 0.7*C12 + 0.6*C21 - 0.7*C22 + 0.3*U_1 - 0.5*U_2
+                  + 0.4*U_3 + 1.6*C3 - 0.8*C4)
+        return np.random.binomial(1, expit(logits))
+
+    def equation_M(C21, C22, X, noise, **kwargs):
+        C4 = (C21**C22) + (1 - C22) * np.sin(np.abs(C21) * np.pi)
+        logits = -0.5 - 1.4*C21 + 1.3*C22 - 1.2*X + 2.2*C4*X - C4
+        return np.random.binomial(1, expit(logits))
+
+    def equation_L(C11, C12, C21, C22, M, U_1, U_2, U_3, noise, **kwargs):
+        C3 = stats.norm.cdf(C11 * C12) + (1 - C12) * np.sin(np.abs(C11) * np.pi)
+        C4 = (C21**C22) + (1 - C22) * np.sin(np.abs(C21) * np.pi)
+        logits = (0.5 - 0.5*C11 - 0.4*C12 + 0.8*C21 + 0.9*C22 - 1.2*M + 0.3*U_1
+                  + 0.6*U_2 - 0.4*U_3 - 1.8*C3*M - 1.5*C4*M + 1.2*C3 + 0.8*C4)
+        return np.random.binomial(1, expit(logits))
+
+    def equation_Y(C21, C22, L, noise, **kwargs):
+        C4 = (C21**C22) + (1 - C22) * np.sin(np.abs(C21) * np.pi)
+        mean = 0.5 + 0.7*C21 - 0.5*C22 + 1.6*L + 1.1*C4*L + 0.8*C4
+        return mean + noise
+
+    # --- SCM Construction ---
+    scm = StructuralCausalModel()
+    scm.add_unobserved_variable('U_1', stats.bernoulli(0.4))
+    scm.add_unobserved_variable('U_2', stats.uniform(0, 1.5))
+    scm.add_unobserved_variable('U_3', stats.norm(0, 1))
+
+    scm.add_observed_variable('C11', equation_C11, [], stats.norm(0, 0.1))
+    scm.add_observed_variable('C12', equation_C12, [], stats.norm(0, 0.1))
+    scm.add_observed_variable('C21', equation_C21, [], stats.norm(0, 0.1))
+    scm.add_observed_variable('C22', equation_C22, [], stats.norm(0, 0.1))
+    scm.add_observed_variable('X', equation_X, ['C11', 'C12', 'C21', 'C22', 'U_1', 'U_2', 'U_3'], stats.norm(0, 0.1))
+    scm.add_observed_variable('M', equation_M, ['C21', 'C22', 'X'], stats.norm(0, 0.1))
+    scm.add_observed_variable('L', equation_L, ['C11', 'C12', 'C21', 'C22', 'M', 'U_1', 'U_2', 'U_3'], stats.norm(0, 0.1))
+    scm.add_observed_variable('Y', equation_Y, ['C21', 'C22', 'L'], stats.norm(0, 1.5))
+
+    treatment = ['X']
+    outcome = ['Y']
+    return [scm, treatment, outcome]
+
+
 def Napkin_SCM(seednum = None):
 	if seednum is not None: 
 		random.seed(int(seednum))
@@ -678,6 +738,69 @@ def Napkin_SCM(seednum = None):
 	Y = ['Y']
 
 	return [scm, X, Y]
+
+def Bhattacharya2022_Fig5_SCM(seednum=None, **kwargs):
+    """
+    Python implementation for the ADMG in Figure 5 from Bhattacharya et al. (2022).
+    - Treatment is named 'X'.
+    - Unmeasured confounders are named 'U_#'.
+    """
+    if seednum is not None:
+        random.seed(int(seednum))
+        np.random.seed(seednum)
+
+    # --- Structural Equations ---
+    def equation_C1(U_7, U_8, U_9, U_10, noise, **kwargs):
+        return 0.4*U_7 - 0.1*U_8 + 0.6*U_9 + 0.8*U_10 + noise
+
+    def equation_C2(U_7, U_8, U_9, U_10, noise, **kwargs):
+        return -0.3*U_7 - 0.7*U_8 + 0.8*U_9 + 1.2*U_10 + noise
+
+    def equation_R2(U_1, U_2, U_3, U_4, noise, **kwargs):
+        return np.random.binomial(1, expit(-0.2 + 0.3*U_1 - 0.8*U_2 + 0.4*U_3 + 0.6*U_4))
+
+    def equation_Z(U_1, U_2, U_5, U_6, noise, **kwargs):
+        return np.random.binomial(1, expit(-0.5 + U_1 + 0.2*U_2 - 0.8*U_5 + 0.3*U_6))
+
+    def equation_X(C1, C2, Z, U_3, U_4, noise, **kwargs):
+        C3 = np.abs(C1 * C2)**0.5 + np.sin(np.abs(C1 + C2) * np.pi)
+        C4 = stats.norm.cdf(C1)
+        logits = 0.5 - 0.5*C1 + 0.5*C2 + 0.3*Z + 0.5*U_3 - 0.4*U_4 + 0.8*C3 - 1.3*C4
+        return np.random.binomial(1, expit(logits))
+
+    def equation_R1(X, U_5, U_6, noise, **kwargs):
+        return np.random.binomial(1, expit(0.2 + 0.7*X - 0.6*U_5 - 0.6*U_6))
+
+    def equation_M(R1, U_7, U_8, noise, **kwargs):
+        return np.random.binomial(1, expit(0.5 - 0.8*R1 + 1.2*U_7 - 1.5*U_8))
+
+    def equation_Y(C1, C2, X, M, R2, U_9, U_10, noise, **kwargs):
+        C3 = np.abs(C1 * C2)**0.5 + np.sin(np.abs(C1 + C2) * np.pi)
+        C4 = stats.norm.cdf(C1)
+        mean = (-1 + 0.5*C1 + 0.2*C2 + 1.2*X + 0.8*R2 + 0.8*M + 0.2*U_9 - 0.4*U_10
+                + 0.8*C3 - 1.2*C4 + M*X)
+        return mean + noise
+
+    # --- SCM Construction ---
+    scm = StructuralCausalModel()
+    ps = [0.4, 0.3, 0.4, 0.3, 0.3]
+    for i, p in zip(range(1, 10, 2), ps): scm.add_unobserved_variable(f'U_{i}', stats.bernoulli(p))
+    for i in range(2, 11, 2): scm.add_unobserved_variable(f'U_{i}', stats.norm(0, 1))
+
+    scm.add_observed_variable('C1', equation_C1, ['U_7', 'U_8', 'U_9', 'U_10'], stats.norm(0, 1))
+    scm.add_observed_variable('C2', equation_C2, ['U_7', 'U_8', 'U_9', 'U_10'], stats.norm(0, 1))
+    scm.add_observed_variable('R2', equation_R2, ['U_1', 'U_2', 'U_3', 'U_4'], stats.norm(0, 0.1))
+    scm.add_observed_variable('Z', equation_Z, ['U_1', 'U_2', 'U_5', 'U_6'], stats.norm(0, 0.1))
+    scm.add_observed_variable('X', equation_X, ['C1', 'C2', 'Z', 'U_3', 'U_4'], stats.norm(0, 0.1))
+    scm.add_observed_variable('R1', equation_R1, ['X', 'U_5', 'U_6'], stats.norm(0, 0.1))
+    scm.add_observed_variable('M', equation_M, ['R1', 'U_7', 'U_8'], stats.norm(0, 0.1))
+    scm.add_observed_variable('Y', equation_Y, ['C1', 'C2', 'X', 'M', 'R2', 'U_9', 'U_10'], stats.norm(0, 1))
+
+    treatment = ['X']
+    outcome = ['Y']
+    return [scm, treatment, outcome]
+
+
 
 
 def Napkin_SCM_dim(seednum = None, d=5):
@@ -1042,5 +1165,5 @@ def Plan_ID_SCM(seednum = None):
 	return [scm, X, Y]
 
 if __name__ == "__main__":
-    [scm, X, Y] = Bhattacharya2022_Fig2b_SCM(num_sample = 10000, d= 100)
+    [scm, X, Y] = Bhattacharya2022_Fig5_SCM(num_sample = 10000, d= 100)
     sample_data = scm.generate_samples(100)
