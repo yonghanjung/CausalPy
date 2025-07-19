@@ -3,6 +3,8 @@ import scipy.stats as stats
 import numpy as np
 import pandas as pd
 from scipy.linalg import toeplitz
+from scipy.special import expit
+
 
 from SCM import StructuralCausalModel  # Ensure generateSCM.py is in the same directory
 
@@ -86,140 +88,145 @@ def Kang_Schafer(seednum = None):
 	Y = ['Y']
 	return [scm, X, Y]
 
-def CCDDHNR2018_PLR(seednum = None, d=20, **kwargs):
-	num_samples = kwargs.pop('num_sample')
-	
-	theta = kwargs.get('theta', 0.5)
-	a0 = kwargs.get('a0', 1.0)
-	a1 = kwargs.get('a1', 0.25)
-	b0 = kwargs.get('b0', 1.0)
-	b1 = kwargs.get('b1', 0.25)
-	s1 = kwargs.get('s1', 1.0)
-	s2 = kwargs.get('s2', 1.0)
-	
-	if seednum is not None: 
-		random.seed(int(seednum))
-		np.random.seed(seednum)
-		rng = np.random.default_rng(seednum)
-	else:
-		random.seed(123)
-		np.random.seed(123)
-		rng = np.random.default_rng(123)
-
-	# Σ with exponential decay 0.7^{|k-j|}
-	Sigma = toeplitz(0.7 ** np.arange(d))
-	X = stats.multivariate_normal.rvs(mean = np.zeros(d), cov = Sigma, size=num_samples)
-	
- 	# Nuisance functions
-	def m0(x):
-		return a0 * x[..., 0] + a1 * np.exp(x[..., 2]) / (1.0 + np.exp(x[..., 2]))
-
-	def g0(x):
-		return b0 * np.exp(x[..., 0]) / (1.0 + np.exp(x[..., 0])) + b1 * x[..., 2]
-	
-	v = rng.normal(scale=s1, size=num_samples)
-	D = m0(X) + v
-
-	zeta = rng.normal(scale=s2, size=num_samples)
-	Y = theta * D + g0(X) + zeta
-
-	return X, D, Y
-
 def CCDDHNR2018_IRM(seednum=None, **kwargs):
     """
-    Binary‑treatment Interactive‑Regression‑Model (IRM) generator from
-    Chernozhukov et al. (2018, App. P), written in the same style as
-    `CCDDHNR2018_PLR`.
-
-    Required keyword argument
-    -------------------------
-    num_sample : int
-        Sample size n.
+    Binary-treatment Interactive-Regression-Model (IRM) generator from
+    Chernozhukov et al. (2018, App. P), refactored for the SCM framework.
 
     Optional keyword arguments (with defaults)
     ------------------------------------------
+    d       : int, number of covariates          (default 20)
     theta   : float, causal effect               (default 0.5)
     R2_d    : float, targeted R² for treatment   (default 0.5)
     R2_y    : float, targeted R² for outcome     (default 0.5)
     corr    : float, base correlation ρ in Σ     (default 0.5)
     """
 
-    num_samples = kwargs.pop('num_sample')           # required
+    # --- Model Parameters ---
     d = kwargs.get('d', 20)
     theta  = kwargs.get('theta', 0.5)
     R2_d   = kwargs.get('R2_d', 0.5)
     R2_y   = kwargs.get('R2_y', 0.5)
     corr   = kwargs.get('corr', 0.5)
 
-    # ---------- random‑seed handling ----------------------------------------
+    # --- Random-Seed Handling ---
     if seednum is not None:
         random.seed(int(seednum))
         np.random.seed(seednum)
-        rng = np.random.default_rng(seednum)
     else:
         random.seed(123)
         np.random.seed(123)
-        rng = np.random.default_rng(123)
 
-    # ---------- covariates X -------------------------------------------------
-    Sigma = toeplitz(corr ** np.arange(d))                         # Σ_{kj}=ρ^{|k-j|}
-    X = stats.multivariate_normal.rvs(mean=np.zeros(d),
-                                      cov=Sigma,
-                                      size=num_samples)
-
-    # ---------- coefficient vector β_j = 1/j² -------------------------------
+    # --- Pre-calculate Constants and Vectors ---
+    Sigma = toeplitz(corr ** np.arange(d))
     beta = 1.0 / (np.arange(1, d + 1) ** 2)
     beta_Sig_beta = beta @ Sigma @ beta
-
-    # ---------- scale factors to hit desired R² -----------------------------
     c_d = np.sqrt((np.pi**2 / 3) * R2_d / ((1 - R2_d) * beta_Sig_beta))
     c_y = np.sqrt(R2_y / ((1 - R2_y) * beta_Sig_beta))
 
-    # ---------- treatment D ~ Bernoulli(p) ----------------------------------
-    logits = c_d * (X @ beta)                    # linear index → log‑odds
-    p = 1.0 / (1.0 + np.exp(-logits))
-    D = rng.binomial(1, p, size=num_samples)     # {0,1}
+    # --- Structural Equations ---
 
-    # ---------- outcome Y ----------------------------------------------------
-    zeta = rng.normal(size=num_samples)
-    Y = theta * D + c_y * (X @ beta) + zeta
+    # Equation for covariates X (exogenous)
+    def equation_X(noise, **eq_kwargs):
+        num_samples = eq_kwargs.pop('num_sample')
+        # Sigma is pre-calculated in the outer scope
+        return stats.multivariate_normal.rvs(mean=np.zeros(d), cov=Sigma, size=num_samples)
 
-    return X, D, Y
+    # Equation for treatment D (binary)
+    def equation_D(X, noise, **eq_kwargs):
+        # The noise argument is unused; randomness is from the binomial draw.
+        # The random seed is set in the outer function.
+        logits = c_d * (X @ beta)
+        p = inv_logit(logits)
+        return np.random.binomial(1, p)
 
-def Dukes_Vansteelandt_Farrel(seednum = None, d=200):
-	# Inference for treatment effect parameters in potentially misspecified high-dimensional models
-	if seednum is not None: 
-		random.seed(int(seednum))
-		np.random.seed(seednum)
+    # Equation for outcome Y
+    def equation_Y(D, X, noise, **eq_kwargs):
+        # The noise argument corresponds to zeta ~ N(0,1) from the original paper.
+        return theta * D + c_y * (X @ beta) + noise
 
-	def equation_Z(**kwargs):
-		num_samples = kwargs.pop('num_sample')
-		first_column = [2**(-abs(j - 0) - 1) for j in range(d)]
-		first_row = [2**(-abs(0 - k) - 1) for k in range(d)]
-		toeplitz_matrix = toeplitz(first_column, first_row)
-		
-		return stats.multivariate_normal.rvs(mean = np.zeros(d), cov = toeplitz_matrix, size=num_samples)
+    # --- SCM Construction ---
+    scm = StructuralCausalModel()
 
-	def equation_X(Z, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		coeffs = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
-		prob_X = inv_logit( np.dot(np.array(coeffs), np.array(Z).T ) )
-		return np.random.binomial(1, prob_X)
+    # Add variables to the SCM object
+    scm.add_observed_variable('X', equation_X, [], stats.norm(0, 0.1))  # Placeholder noise
+    scm.add_observed_variable('D', equation_D, ['X'], stats.norm(0, 0.1))  # Placeholder noise
+    scm.add_observed_variable('Y', equation_Y, ['D', 'X'], stats.norm(0, 1))  # Noise zeta ~ N(0,1)
 
-	def equation_Y(Z,X, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		coeffs = [-1,1,-1] + [(i - 2) ** (-2) for i in range(4,d+1)]
-		Y = np.dot(np.array(coeffs), np.array(Z).T ) + 0.3 * X + noise
-		return Y
-	
-	scm = StructuralCausalModel()
-	scm.add_observed_variable('Z', equation_Z, [], stats.norm(0, 0.1))
-	scm.add_observed_variable('X', equation_X, ['Z'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y', equation_Y, ['Z', 'X'], stats.norm(0, 0.1))
+    # --- Define Treatment and Outcome variables ---
+    D_vars = ['D']
+    Y_vars = ['Y']
 
-	X = ['X']
-	Y = ['Y']
-	return [scm, X, Y]
+    return [scm, D_vars, Y_vars]
+
+def CCDDHNR2018_PLR(seednum=None, d=20, **kwargs):
+    """
+    Partially-Linear-Regression (PLR) model from Chernozhukov et al. (2018),
+    rewritten to conform to the SCM framework.
+    """
+    
+    # Model parameters from kwargs
+    theta = kwargs.get('theta', 0.5)
+    a0 = kwargs.get('a0', 1.0)
+    a1 = kwargs.get('a1', 0.25)
+    b0 = kwargs.get('b0', 1.0)
+    b1 = kwargs.get('b1', 0.25)
+    s1 = kwargs.get('s1', 1.0)  # std dev for treatment noise
+    s2 = kwargs.get('s2', 1.0)  # std dev for outcome noise
+
+    # --- Random-seed handling ---
+    if seednum is not None: 
+        random.seed(int(seednum))
+        np.random.seed(seednum)
+    else:
+        # Maintain original default seed behavior if no seed is provided
+        random.seed(123)
+        np.random.seed(123)
+
+    # --- Structural Equations ---
+
+    # Equation for covariates X (exogenous)
+    def equation_X(noise, **eq_kwargs):
+        num_samples = eq_kwargs.pop('num_sample')
+        Sigma = toeplitz(0.7 ** np.arange(d))
+        return stats.multivariate_normal.rvs(mean=np.zeros(d), cov=Sigma, size=num_samples)
+
+    # Equation for treatment D
+    def equation_D(X, noise, **eq_kwargs):
+        # Nuisance function m0(x) for the treatment
+        def m0(x):
+            return a0 * x[..., 0] + a1 * np.exp(x[..., 2]) / (1.0 + np.exp(x[..., 2]))
+        
+        # D = m0(X) + noise (where noise ~ N(0, s1))
+        return m0(X) + noise
+
+    # Equation for outcome Y
+    def equation_Y(D, X, noise, **eq_kwargs):
+        # Nuisance function g0(x) for the outcome
+        def g0(x):
+            return b0 * np.exp(x[..., 0]) / (1.0 + np.exp(x[..., 0])) + b1 * x[..., 2]
+        
+        # Y = theta * D + g0(X) + noise (where noise ~ N(0, s2))
+        return theta * D + g0(X) + noise
+
+    # --- SCM Construction ---
+    scm = StructuralCausalModel()
+    
+    # Add variables to the SCM
+    # Placeholder noise for the exogenous variable X
+    scm.add_observed_variable('X', equation_X, [], stats.norm(0, 0.1)) 
+    # Treatment D depends on X, with noise Normal(0, s1)
+    scm.add_observed_variable('D', equation_D, ['X'], stats.norm(0, s1))
+    # Outcome Y depends on D and X, with noise Normal(0, s2)
+    scm.add_observed_variable('Y', equation_Y, ['D', 'X'], stats.norm(0, s2))
+
+    # --- Define Treatment and Outcome variables ---
+    # Per the model's structure, D is the treatment and Y is the outcome.
+    # Note: The covariate is 'X', while the treatment is 'D'.
+    D_vars = ['D'] 
+    Y_vars = ['Y']
+
+    return [scm, D_vars, Y_vars]
 
 
 def mSBD_SCM_JCI(seednum = None, d=4):
@@ -325,162 +332,88 @@ def mSBD_SCM(seednum = None, d=4):
 
 	return [scm, X, Y]
 
+def luedtke_2017_sim1_scm(seed=None, **kwargs):
+    """
+    Creates the Structural Causal Model for Simulation 1 from Luedtke et al. (2017).
 
-def Luedtke_v1(seednum = None):
-	if seednum is not None: 
-		random.seed(int(seednum))
-		np.random.seed(seednum)
+    This function defines the structural equations for a 3-timepoint longitudinal
+    study and returns the SCM object, treatment variables, and outcome variables.
 
-	def equation_Z1(noise, **kwargs):
-		num_samples = kwargs.get('num_sample', None)
-		return np.random.normal(0,1,size=num_samples)
+    Args:
+        seed (int, optional): A seed for the random number generator for
+                              reproducibility. Defaults to None.
 
-	def equation_X1(Z1, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( Z1 ) 
-		return np.random.binomial(1, prob)
+    Returns:
+        list: A list containing [scm, treatment_vars, outcome_vars] where:
+              - scm: The configured StructuralCausalModel object.
+              - treatment_vars (list): A list of the treatment variable names.
+              - outcome_vars (list): A list of the outcome variable names.
+    """
+    if seed is not None:
+        np.random.seed(seed)
 
-	def equation_Z2(Z1, X1, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		return np.random.normal(0,1,size=num_samples)
+    # --- Define Structural Equations ---
+    num_samples = kwargs.get('num_sample', None)
 
-	def equation_X2(Z1, X1, Z2,  noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( Z2 + X1 + Z1  )
-		return np.random.binomial(1, prob)
+    # Time-point t=1
+    def equation_Z1(noise, **kwargs):
+        # Z1 = stats.norm.rvs(loc=0, scale=1, size=num_samples)
+        return noise
 
-	def equation_Z3(Z1, X1, Z2, X2, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		Z3 = Z1* X2 + Z2 * X1 + Z2 * X2  + noise 
-		return Z3 
+    def equation_X1(Z1, noise, **kwargs):
+        prob = expit(Z1)
+        return np.random.binomial(1, prob)
 
-	def equation_X3(Z1, X1, Z2, X2, Z3,  noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( Z1 + X1 + Z2 + X2 + Z3  )
-		return np.random.binomial(1, prob)
+    # Time-point t=2
+    def equation_Z2(noise, **kwargs):
+        # Z2 = stats.norm.rvs(loc=0, scale=1, size=num_samples)
+        return noise
 
-	def equation_Y(Z1, X1, Z2, X2, Z3, X3, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( Z2*X3 + X2*Z3 + Z3*X3  )
-		return np.random.binomial(1, prob)
+    def equation_X2(Z2, X1, noise, **kwargs):
+        prob = expit(Z2 + X1)
+        return np.random.binomial(1, prob)
 
-	scm = StructuralCausalModel()
-	scm.add_observed_variable('Z1', equation_Z1, [], stats.norm(0, 0.1))
-	scm.add_observed_variable('X1', equation_X1, ['Z1'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Z2', equation_Z2, ['Z1', 'X1'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X2', equation_X2, ['Z1', 'X1', 'Z2'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Z3', equation_X2, ['Z1', 'X1', 'Z2', 'X2'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X3', equation_X2, ['Z1', 'X1', 'Z2', 'X2', 'Z3'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y', equation_X2, ['Z1', 'X1', 'Z2', 'X2', 'Z3', 'X3'], stats.norm(0, 0.1))
+    # Time-point t=3
+    def equation_Z3(Z1, X1, Z2, X2, noise, **kwargs):
+        # L3 ~ Normal(L1*A2 + A1*L2 + L2*A2, 1).
+        mean_Z3 = Z1 * X2 + X1 * Z2 + Z2 * X2
+        return mean_Z3 + noise
 
-	X = ['X1', 'X2', 'X3']
-	Y = ['Y']
+    def equation_X3(Z3, X2, noise, **kwargs):
+        # A3 ~ Bernoulli(expit(L3 + A2)).
+        prob = expit(Z3 + X2)
+        return np.random.binomial(1, prob)
 
-	return [scm, X, Y]
+    def equation_Y(Z2, X2, Z3, X3, noise, **kwargs):
+        prob = expit(Z2 * X3 + X2 * Z3 + Z3 * X3)
+        return np.random.binomial(1, prob)
 
 
-def Luedtke_v2(seednum = None):
-	if seednum is not None: 
-		random.seed(int(seednum))
-		np.random.seed(seednum)
+    # --- SCM Construction ---
+    scm = StructuralCausalModel()
 
-	def equation_Z1(noise, **kwargs):
-		num_samples = kwargs.get('num_sample', None)
-		Z = np.abs( np.random.normal(0,1,size=num_samples) )
-		return Z 
+    # Time-point 1
+    scm.add_observed_variable('Z1', equation_Z1, [], stats.norm(0, 1))
+    scm.add_observed_variable('X1', equation_X1, ['Z1'], stats.norm(0, 0.1)) # Placeholder noise
 
-	def equation_X1(Z1, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( Z1 ) 
-		return np.random.binomial(1, prob)
+    # Time-point 2
+    scm.add_observed_variable('Z2', equation_Z2, [], stats.norm(0, 1))
+    scm.add_observed_variable('X2', equation_X2, ['Z2', 'X1'], stats.norm(0, 0.1))
 
-	def equation_Z2(Z1, X1, noise, **kwargs):
-		num_samples = kwargs.get('num_sample', None)
-		Z = -2*X1 + 0.5 * Z1 +  np.abs( np.random.normal(0,1,size=num_samples) )
-		return Z 
+    # Time-point 3
+    scm.add_observed_variable('Z3', equation_Z3, ['Z1', 'X1', 'Z2', 'X2'], stats.norm(0, 1))
+    scm.add_observed_variable('X3', equation_X3, ['Z3', 'X2'], stats.norm(0, 0.1))
+    scm.add_observed_variable('Y', equation_Y, ['Z2', 'X2', 'Z3', 'X3'], stats.norm(0, 0.1))
 
-	def equation_X2(Z1, X1, Z2, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		eq1 = inv_logit( 1.7 - 2*( inv_logit(Z2) > 0.9 ) )
-		prob = inv_logit( X1* eq1 )
-		return np.random.binomial(1, prob)
+    # --- Define Treatment and Outcome variables ---
+    # The treatments are the time-varying actions A_t.
+    # The final outcome of interest is Y3.
+    treatments = ['X1', 'X2', 'X3']
+    outcomes = ['Y']
 
-	def equation_Y2(Z1, X1, Z2, X2, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( -3 + 0.5*Z1*X2 + 0.5 * X1*Z2 + 0.5 * Z2 * X2 )
-		return np.random.binomial(1, prob)
+    return [scm, treatments, outcomes]
 
-	def equation_Z3(Z1, X1, Z2, X2, Y2, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		L3 = np.abs( X1 * Z2 + Z2 * X2 + noise ) 
-		Z3 = -2 * 0.5 * Z2 + L3 
-		return Z3 
 
-	def equation_X3(Z1, X1, Z2, X2, Y2, Z3, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		eq1 = inv_logit( 1.7 - 2*( inv_logit(Z3) > 0.85 ) )
-		prob = inv_logit( X2* eq1 )
-		return np.random.binomial(1, prob)
-
-	def equation_Y3(Z1, X1, Z2, X2, Y2, Z3, X3, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( -3*Y2 + 0.5*Z2*X3 + 0.5 * X2*Z3 + 0.5 * Z3 * X3 )
-		return np.random.binomial(1, prob)
-
-	def equation_Z4(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		L4 = np.abs( Z2 * X3 + X2 * Z3 + Z3 * X3 + noise ) 
-		Z4 = -2 * 0.5 * Z3 + L4 
-		return Z4 
-
-	def equation_X4(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		eq1 = inv_logit( 1.7 - 2*( inv_logit(Z4) > 0.8 ) )
-		prob = inv_logit( X3* eq1 )
-		return np.random.binomial(1, prob)
-
-	def equation_Y4(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, X4, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( -3*Y3 + 0.5*Z3*X4 + 0.5 * X3*Z4 + 0.5 * Z4 * X4 )
-		return np.random.binomial(1, prob)
-
-	def equation_Z5(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, X4, Y4, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		L5 = np.abs( Z2 * X4 + X2 * Z4 + Z4 * X4 + noise ) 
-		Z5 = -1 + 0.25 * Z4 + 0.5 * L5 - 0.1 * Z4 * L5 + 1.5 * Z4
-		return Z5 
-
-	def equation_X5(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, X4, Y4, Z5, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		eq1 = inv_logit( 2 - 2*( inv_logit(Z5) > 0.8 ) )
-		prob = inv_logit( X4* eq1 )
-		return np.random.binomial(1, prob)
-
-	def equation_Y5(Z1, X1, Z2, X2, Y2, Z3, X3, Y3, Z4, X4, Y4, Z5, X5, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( -Y4 + X5 + Z5 * X5 + 0.2 * X4 * Z5 )
-		return np.random.binomial(1, prob)
-
-	scm = StructuralCausalModel()
-	scm.add_observed_variable('Z1', equation_Z1, [], stats.norm(0, 0.1))
-	scm.add_observed_variable('X1', equation_X1, ['Z1'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Z2', equation_Z2, ['Z1', 'X1'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X2', equation_X2, ['Z1', 'X1', 'Z2'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y2', equation_Y2, ['Z1', 'X1', 'Z2', 'X2'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Z3', equation_Z3, ['Z1', 'X1', 'Z2', 'X2', 'Y2'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X3', equation_X3, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y3', equation_Y3, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Z4', equation_Z4, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X4', equation_X4, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y4', equation_Y4, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4', 'X4'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Z5', equation_Z5, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4', 'X4', 'Y4'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X5', equation_X5, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4', 'X4', 'Y4', 'Z5'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y5', equation_Y5, ['Z1', 'X1', 'Z2', 'X2', 'Y2', 'Z3', 'X3', 'Y3', 'Z4', 'X4', 'Y4', 'Z5','X5'], stats.norm(0, 0.1))
-
-	X = ['X1', 'X2', 'X3', 'X4', 'X5']
-	Y = ['Y3', 'Y4', 'Y5']
-
-	return [scm, X, Y]
 
 def Fulcher_FD(seednum = None):
 	if seednum is not None: 
@@ -1090,4 +1023,7 @@ def Plan_ID_SCM(seednum = None):
 	Y = ['Y']
 
 	return [scm, X, Y]
-	
+
+if __name__ == "__main__":
+    [scm, X, Y] = luedtke_2017_sim1_scm(num_sample = 10000, d= 100)
+    sample_data = scm.generate_samples(100)
