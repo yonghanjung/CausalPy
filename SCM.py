@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import graph
 from scipy.special import expit, logit
+from pyvis.network import Network
+
 
 class StructuralCausalModel:
 	def __init__(self):
@@ -391,7 +393,54 @@ class StructuralCausalModel:
 		nx.draw(self.graph, pos, with_labels=True, node_color=color_map, font_weight='bold', arrows=True)
 		plt.show()
 
-	
+	def get_adjacency_matrix(self):
+		"""
+		Returns the adjacency matrix of the causal graph as a pandas DataFrame.
+
+		In the matrix, the value at row `i` and column `j` is 1 if there is a
+		directed edge from node `i` to node `j`, and 0 otherwise.
+		"""
+		# Get a sorted list of nodes to ensure consistent matrix order
+		node_list = sorted(list(self.graph.nodes()))
+		# Get the adjacency matrix as a SciPy sparse matrix
+		adj_matrix_sparse = nx.adjacency_matrix(self.graph, nodelist=node_list)
+		# Convert to a dense pandas DataFrame for easy viewing
+		df = pd.DataFrame(adj_matrix_sparse.toarray(), index=node_list, columns=node_list)
+		return df
+
+	# You can add this method to your StructuralCausalModel class
+	def visualize_interactive(self, filename="interactive_graph.html"):
+		"""
+		Creates an interactive HTML visualization of the causal graph using pyvis.
+		Nodes can be dragged and moved independently after disabling physics in the UI.
+		"""
+		if not self.graph.nodes:
+			print("Graph is empty. Nothing to visualize.")
+			return
+
+		net = Network(height="750px", width="100%", directed=True, notebook=True, cdn_resources='in_line')
+		net.from_nx(self.graph)
+
+		for node in net.nodes:
+			node_id = node["id"]
+			if node_id.startswith('X'):
+				node["color"] = 'skyblue'
+			elif node_id.startswith('Y'):
+				node["color"] = 'salmon'
+			elif node_id.startswith('U'):
+				node["color"] = 'lightgray'
+			else:
+				node["color"] = 'lightgreen'
+		
+		# It adds a UI to the HTML file to control physics settings.
+		net.show_buttons(filter_=['physics'])
+
+		try:
+			net.show(filename)
+			print(f"Interactive graph saved to {filename}")
+			print("Open this file in a browser. To move nodes freely, uncheck the 'enabled' box in the 'physics' menu.")
+		except Exception as e:
+			print(f"An error occurred while generating the interactive graph: {e}")
 
 if __name__ == "__main__":
 	'''
@@ -407,7 +456,7 @@ if __name__ == "__main__":
 	# scm.generate_random_scm(num_unobserved=1, num_observed=4, num_treatments=1, num_outcomes=1)
 	sample_data = scm.generate_samples(100)
 	print(sample_data)
-	scm.visualize()
+	# scm.visualize()
  
 	graph_data = scm.generate_random_graph(
 			num_observables=10,
@@ -441,7 +490,7 @@ if __name__ == "__main__":
 	scm.add_observed_variable('X', equation_X, ['Z1', 'Z2'], stats.norm(0, 0.1))
 	scm.add_observed_variable('Y', equation_Y, ['Z1', 'Z2', 'X'], stats.norm(0, 0.1))
 	sample_data = scm.generate_samples(100)
-	scm.visualize()
+	# scm.visualize()
 
 	
 
