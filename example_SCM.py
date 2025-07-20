@@ -3,7 +3,7 @@ import scipy.stats as stats
 import numpy as np
 import pandas as pd
 from scipy.linalg import toeplitz
-from scipy.special import expit
+from scipy.special import expit, softmax
 
 
 from SCM import StructuralCausalModel  # Ensure generateSCM.py is in the same directory
@@ -800,7 +800,124 @@ def Bhattacharya2022_Fig5_SCM(seednum=None, **kwargs):
     outcome = ['Y']
     return [scm, treatment, outcome]
 
+def ConeCloud_15_SCM(seednum=None, **kwargs):
+    """
+    An example Structural Causal Model for the 15-node Cone Cloud graph
+    from Figure 3b of Bhattacharya et al. (2022).
 
+    - Treatment (Intervention): X = V10
+    - Outcome: Y = V4
+    - Observable variables are categorical with a domain size of 4.
+    - Unmeasured confounders (U_*) represent the bidirected edges.
+    """
+    if seednum is not None:
+        random.seed(int(seednum))
+        np.random.seed(seednum)
+
+    # Helper function to generate categorical variables
+    def generate_categorical(logits, num_samples):
+        if logits.ndim == 1:
+            logits = np.tile(logits, (4, 1)).T
+        probabilities = softmax(logits, axis=1)
+        return np.array([np.random.choice(4, p=p_row) for p_row in probabilities])
+
+    # --- Structural Equations ---
+    # Central node
+    def equation_V5(noise, **kwargs):
+        num_samples = kwargs.get('num_sample')
+        logits = np.tile(noise.reshape(-1, 1), (1, 4))
+        return generate_categorical(logits, num_samples)
+
+    # Nodes dependent on V5
+    def equation_V3(V5, noise, **kwargs):
+        logits = 0.8 * V5 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_V8(V5, noise, **kwargs):
+        logits = 0.7 * V5 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_V6(V5, U_1_6, noise, **kwargs):
+        logits = 0.5 * V5 + 1.2 * U_1_6 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_V7(V5, U_2_7, noise, **kwargs):
+        logits = 0.6 * V5 + 1.1 * U_2_7 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_V9(V5, U_13_9, noise, **kwargs):
+        logits = 0.4 * V5 + 1.3 * U_13_9 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_V11(V5, U_12_11, noise, **kwargs):
+        logits = 0.55 * V5 + 1.4 * U_12_11 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    # Outer layer nodes
+    def equation_V1(V3, U_1_6, noise, **kwargs):
+        logits = 0.9 * V3 + 0.8 * U_1_6 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_V2(V3, U_2_7, noise, **kwargs):
+        logits = 0.85 * V3 + 0.9 * U_2_7 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_V13(V8, U_13_9, noise, **kwargs):
+        logits = 0.75 * V8 + 0.7 * U_13_9 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_V12(V8, U_12_11, noise, **kwargs):
+        logits = 0.95 * V8 + 0.6 * U_12_11 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    # Treatment and Outcome variables
+    def equation_X1(V9, V11, U_10_4, noise, **kwargs): # Previously V4
+        logits = 0.7 * V9 + 0.6 * V11 + 2.0 * U_10_4 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_X2(V6, V7, U_10_4, noise, **kwargs): # Previously V10
+        logits = 0.6 * V6 + 0.5 * V7 - 1.2 * U_10_4 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_X3(V12, V13, U_0_14, noise, **kwargs): # Previously V14
+        logits = 0.5 * V12 + 0.3 * V13 + 1.5 * U_0_14 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    def equation_Y(V1, V2, U_0_14, noise, **kwargs): # Previously V0
+        logits = 0.4 * V1 + 0.4 * V2 + 1.5 * U_0_14 + noise
+        return generate_categorical(logits, kwargs.get('num_sample'))
+
+    # --- SCM Construction ---
+    scm = StructuralCausalModel()
+
+    # Add unobserved variables for bidirected edges
+    scm.add_unobserved_variable('U_0_14', stats.norm(0, 1))
+    scm.add_unobserved_variable('U_10_4', stats.norm(0, 1))
+    scm.add_unobserved_variable('U_1_6', stats.norm(0, 1))
+    scm.add_unobserved_variable('U_2_7', stats.norm(0, 1))
+    scm.add_unobserved_variable('U_13_9', stats.norm(0, 1))
+    scm.add_unobserved_variable('U_12_11', stats.norm(0, 1))
+
+    # Add observed variables in a plausible topological order
+    scm.add_observed_variable('V5', equation_V5, [], stats.norm(0, 0.5))
+    scm.add_observed_variable('V3', equation_V3, ['V5'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V8', equation_V8, ['V5'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V6', equation_V6, ['V5', 'U_1_6'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V7', equation_V7, ['V5', 'U_2_7'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V9', equation_V9, ['V5', 'U_13_9'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V11', equation_V11, ['V5', 'U_12_11'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V1', equation_V1, ['V3', 'U_1_6'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V2', equation_V2, ['V3', 'U_2_7'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V13', equation_V13, ['V8', 'U_13_9'], stats.norm(0, 0.5))
+    scm.add_observed_variable('V12', equation_V12, ['V8', 'U_12_11'], stats.norm(0, 0.5))
+    scm.add_observed_variable('X1', equation_X1, ['V9', 'V11', 'U_10_4'], stats.norm(0, 0.5))
+    scm.add_observed_variable('X2', equation_X2, ['V6', 'V7', 'U_10_4'], stats.norm(0, 0.5))
+    scm.add_observed_variable('X3', equation_X3, ['V12', 'V13', 'U_0_14'], stats.norm(0, 0.5))
+    scm.add_observed_variable('Y', equation_Y, ['V1', 'V2', 'U_0_14'], stats.norm(0, 0.5))
+
+    treatments = ['X1', 'X2', 'X3']
+    outcomes = ['Y']
+    return [scm, treatments, outcomes]
 
 
 def Napkin_SCM_dim(seednum = None, d=5):
@@ -1165,5 +1282,5 @@ def Plan_ID_SCM(seednum = None):
 	return [scm, X, Y]
 
 if __name__ == "__main__":
-    [scm, X, Y] = Bhattacharya2022_Fig5_SCM(num_sample = 10000, d= 100)
+    [scm, X, Y] = ConeCloud_15_SCM(num_sample = 10000, d= 100)
     sample_data = scm.generate_samples(100)
