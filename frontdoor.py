@@ -2,11 +2,9 @@ import scipy.stats as stats
 import networkx as nx
 import matplotlib.pyplot as plt
 from itertools import combinations
-
 import adjustment
 import mSBD
 import graph
-
 
 def constructive_FD(G, X, Y):
 	'''

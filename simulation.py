@@ -364,7 +364,7 @@ def random_scm_experiments(seednum, **kwargs):
 		num_treatments = kwargs.get('num_treatments', random.randint(1, 5))
 		num_outcomes = 1
 
-		scm, X, Y = random_generator.Random_SCM_Generator2(num_observables = num_observables, num_unobservables = num_unobservables, num_treatments = num_treatments, num_outcomes = num_outcomes, condition_ID = True, seednum = scm_seednum)
+		scm, X, Y = random_generator.random_SCM_generator(num_observables = num_observables, num_unobservables = num_unobservables, num_treatments = num_treatments, num_outcomes = num_outcomes, condition_ID = True, seednum = scm_seednum)
 
 		G = scm.graph
 		G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)

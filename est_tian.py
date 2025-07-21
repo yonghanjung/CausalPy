@@ -232,7 +232,7 @@ if __name__ == "__main__":
 	np.random.seed(seednum)
 	random.seed(seednum)
 
-	scm, X, Y = random_generator.Random_SCM_Generator(
+	scm, X, Y = random_generator.random_SCM_generator(
 		num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
 		condition_ID=True, 
 		condition_BD=False, 

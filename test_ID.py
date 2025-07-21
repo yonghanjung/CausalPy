@@ -54,14 +54,14 @@ if __name__ == "__main__":
 	seednum = 1
 	np.random.seed(seednum)
 	random.seed(seednum)
-	[graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator(num_observables = 4, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 
+	[graph_dict, node_positions, X, Y] = random_generator.random_graph_generator(num_observables = 10, num_unobservables = 5, num_treatments = 1, num_outcomes = 1, 
 																			condition_ID = True, 
-																			condition_BD = True, 
-																			condition_mSBD = True, 
+																			condition_BD = False, 
+																			condition_mSBD = False, 
 																			condition_FD = False, 
 																			condition_Tian = False, 
-																			condition_gTian = True, 
-																			condition_product = True, 
+																			condition_gTian = False, 
+																			condition_product = False, 
 																			seednum = seednum)
 	# graph_dict = {'U_V1_X3': ['V1', 'X3'], 'V1': ['X1'], 'U_V1_X2': ['X2', 'V1'], 'X2': ['X1', 'V1', 'V2', 'Y1'], 'U_V1_Y1': ['Y1', 'V1'], 'Y1': [], 'X3': ['X2', 'X1', 'V1'], 'U_X1_X3': ['X3', 'X1'], 'X1': ['V2'], 'V2': ['Y1']}
 	# X = ['X1','X2']; Y = ['Y1']; node_positions = None

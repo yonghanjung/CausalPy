@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
 	while graph_counter < num_sim: 
 		seednum = random.randint(1, 1000000)
-		[graph_dict, node_positions, X, Y] = random_generator.Random_Graph_Generator2(num_observables = num_observables, num_unobservables = num_unobservables, num_treatments = num_treatments, num_outcomes = num_outcomes, condition_ID = True, seednum = seednum)
+		[graph_dict, node_positions, X, Y] = random_generator.random_graph_generator(num_observables = num_observables, num_unobservables = num_unobservables, num_treatments = num_treatments, num_outcomes = num_outcomes, condition_ID = True, seednum = seednum)
 		G = graph.create_acyclic_graph(graph_dict=graph_dict, an_Y_graph_TF = False, Y = None, node_positions = node_positions)
 
 		G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
