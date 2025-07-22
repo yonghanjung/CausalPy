@@ -6,6 +6,13 @@ import adjustment
 import mSBD
 import graph
 
+def check_FD(G,X,Y):
+	result = constructive_FD(G, X, Y)
+	if result is not False: 
+		return True 
+	else:
+		result 
+ 
 def constructive_FD(G, X, Y):
 	'''
 	Find the set Z_ii in time O(n + m).

@@ -54,43 +54,51 @@ if __name__ == "__main__":
 	seednum = 1
 	np.random.seed(seednum)
 	random.seed(seednum)
-	[graph_dict, node_positions, X, Y] = random_generator.random_graph_generator(num_observables = 10, num_unobservables = 5, num_treatments = 1, num_outcomes = 1, 
+	result = random_generator.random_graph_generator(num_observables = 5, num_unobservables = 3, num_treatments = 1, num_outcomes = 1, 
 																			condition_ID = True, 
 																			condition_BD = False, 
 																			condition_mSBD = False, 
-																			condition_FD = False, 
-																			condition_Tian = False, 
-																			condition_gTian = False, 
-																			condition_product = False, 
+																			condition_FD = True, 
+																			# condition_Tian = True, 
+																			# condition_gTian = True, 
+																			# condition_product = True, 
 																			seednum = seednum)
-	# graph_dict = {'U_V1_X3': ['V1', 'X3'], 'V1': ['X1'], 'U_V1_X2': ['X2', 'V1'], 'X2': ['X1', 'V1', 'V2', 'Y1'], 'U_V1_Y1': ['Y1', 'V1'], 'Y1': [], 'X3': ['X2', 'X1', 'V1'], 'U_X1_X3': ['X3', 'X1'], 'X1': ['V2'], 'V2': ['Y1']}
-	# X = ['X1','X2']; Y = ['Y1']; node_positions = None
-	G = graph.create_acyclic_graph(graph_dict=graph_dict, an_Y_graph_TF = False, Y = None, node_positions = node_positions)
-
-	# Generate the random SCM 
-	# [scm, X, Y] = random_generator.Random_SCM_Generator(num_observables = 5, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 
-	# 																		condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False, condition_Tian = False, condition_gTian = True)
-	# sample_data = scm.generate_samples(10000)[topo_V]
-	# print(sample_data)
-	# G = scm.graph
 	
+	# Check if the search was successful before unpacking
+	if result is None:
+     	# Handle the failure case
+		print("Search failed to find a matching graph.")
+	else:
+		graph_dict, node_positions, X, Y = result
+		# Now you can proceed with the graph...
+		print("Successfully found a graph!")
 
-	# Visualize the graph 
-	# graph.visualize(G)
-	
-	# Identify the causal effect P(Y | do(X)) from G 
-	# G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
-	print( identify.causal_identification(G,X,Y, latex = False, copyTF=True) )
+		G = graph.create_acyclic_graph(graph_dict=graph_dict, an_Y_graph_TF = False, Y = None, node_positions = node_positions)
+
+		# Generate the random SCM 
+		# [scm, X, Y] = random_generator.Random_SCM_Generator(num_observables = 5, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 
+		# 																		condition_ID = True, condition_BD = False, condition_mSBD = False, condition_FD = False, condition_Tian = False, condition_gTian = True)
+		# sample_data = scm.generate_samples(10000)[topo_V]
+		# print(sample_data)
+		# G = scm.graph
+		
+
+		# Visualize the graph 
+		# graph.visualize(G)
+		
+		# Identify the causal effect P(Y | do(X)) from G 
+		# G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
+		print( identify.causal_identification(G,X,Y, latex = False, copyTF=True) )
 
 
-	# Draw the C-tree and AC-tree 
-	# identify.draw_C_tree(G,X,Y)
-	# identify.draw_AC_tree(G,X,Y)
+		# Draw the C-tree and AC-tree 
+		# identify.draw_C_tree(G,X,Y)
+		# identify.draw_AC_tree(G,X,Y)
 
-	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
+		adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
 
-	# Copy the graph for comparing with Fusion
-	pyperclip.copy(graph.graph_dict_to_fusion_graph(graph_dict))
+		# Copy the graph for comparing with Fusion
+		pyperclip.copy(graph.graph_dict_to_fusion_graph(graph_dict))
 	
 
 

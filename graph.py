@@ -71,13 +71,19 @@ def create_acyclic_graph(graph_dict, an_Y_graph_TF = False, Y = None, node_posit
 	'''
 
 	# Preprocessing to make sure that Y doesn't have an overlapped variable 
-	if Y != None:
-		Y = list(set(Y))
-	if an_Y_graph_TF == True and Y == None:
-		raise ValueError("If an_Y_graph_TF = True, then Y must be a non-empty list")
+	# if Y != None:
+	# 	Y = list(set(Y))
+	# if an_Y_graph_TF == True and Y == None:
+	# 	raise ValueError("If an_Y_graph_TF = True, then Y must be a non-empty list")
 	
 	# Create a directed graph from the dictionary
 	G = nx.DiGraph()
+	
+	# FIX: Add all nodes to the graph first.
+	# The node_positions dictionary reliably contains all nodes that should exist.
+	if node_positions:
+		G.add_nodes_from(node_positions.keys())
+ 
 	for node, children in graph_dict.items():
 		for child in children:
 			G.add_edge(node, child)
