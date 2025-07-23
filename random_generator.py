@@ -285,17 +285,17 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 
 
 if __name__ == "__main__":
-	seednum = 1
+	seednum = 190602
 	np.random.seed(seednum)
 	random.seed(seednum)
-	result = random_graph_generator(num_observables = 4, num_unobservables = 2, num_treatments = 2, num_outcomes = 1, 
+	result = random_graph_generator(num_observables = 4, num_unobservables = 4, num_treatments = 2, num_outcomes = 1, 
 																			condition_ID = True, 
-																			condition_BD = False, 
+																			# condition_BD = True, 
 																			condition_mSBD = True, 
-																			condition_FD = False, 
-																			condition_Tian = False, 
+																			# condition_FD = False, 
+																			# condition_Tian = True, 
 																			condition_gTian = False, 
-																			condition_product = True, 
+																			# condition_product = False, 
 																			seednum = seednum)
 	# Check if the search was successful before unpacking
 	if result is None:

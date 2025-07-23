@@ -1,4 +1,5 @@
 import numpy as np 
+from pyvis.network import Network # Added import
 import networkx as nx
 import matplotlib.pyplot as plt
 import random
@@ -28,6 +29,52 @@ def visualize(graph):
 	nx.draw(graph, pos, with_labels=True, node_color=color_map, font_weight='bold', arrows=True)
 	plt.title("Graph")
 	plt.show(block=False)
+
+def visualize_interactive(graph, filename="interactive_graph.html", edge_curvature=0):
+    """
+    Creates an interactive HTML visualization of the causal graph using pyvis.
+    Nodes can be dragged and moved independently after disabling physics in the UI.
+
+    ** Parameters:
+    - graph (nx.DiGraph): The graph to visualize.
+    - filename (str): The name of the HTML file to save.
+    """
+    if not graph.nodes():
+        print("Graph is empty. Nothing to visualize.")
+        return
+
+    # Create a pyvis network object
+    net = Network(height="750px", width="100%", directed=True, notebook=True, cdn_resources='in_line')
+
+    # Load the networkx graph into pyvis
+    net.from_nx(graph)
+
+    # Customize node colors based on the logic in the original visualize function
+    for node in net.nodes:
+        node_id = str(node["id"])
+        if node_id.startswith('T') or node_id.startswith('X'):
+            node["color"] = 'blue'
+        elif node_id.startswith('O') or node_id.startswith('Y'):
+            node["color"] = 'red'
+        elif node_id.startswith('U'):
+            node["color"] = 'gray'
+        else:
+            node["color"] = 'lightblue'
+            
+    # === NEW: Set edge curvature ===
+    # Iterate through the edges to set their smoothness property for curvature
+    for edge in net.edges:
+        edge['smooth'] = {'type': 'curvedCW', 'roundness': edge_curvature}
+
+    # Add a UI to the HTML file to control physics settings.
+    net.show_buttons(filter_=['physics'])
+
+    try:
+        net.show(filename)
+        print(f"Interactive graph saved to {filename}")
+        print("Open this file in a browser. To move nodes freely, uncheck the 'enabled' box in the 'physics' menu.")
+    except Exception as e:
+        print(f"An error occurred while generating the interactive graph: {e}")
 
 def write_joint_distribution(variables):
 	"""
