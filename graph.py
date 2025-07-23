@@ -416,18 +416,18 @@ def G_cut_outgoing_edges(G, X):
 	return G_modified
 
 
-def generate_random_graph(num_observables, num_unobservables, num_treatments, 
+def generate_random_graph(num_observables, num_unobservables, num_treatments,
                           num_outcomes, sparcity_constant=0.25, seednum=123):
     """
     Efficiently generates a random Acyclic Directed Mixed Graph (ADMG) by construction.
 
     This function first defines a random topological order for the observable nodes
     to guarantee the resulting directed graph is acyclic. It then adds unobserved
-    confounders. This method is much more efficient than trial-and-error.
+    confounders with canonical names to prevent duplicates like U_A_B and U_B_A.
 
     Parameters:
     num_observables (int): Total number of observable nodes.
-    num_unobservables (int): Number of unobserved confounders to add.
+    num_unobservables (int): Number of unique unobserved confounders to add.
     num_treatments (int): Number of treatment variables (X).
     num_outcomes (int): Number of outcome variables (Y).
     sparcity_constant (float): Used to determine the probability of an edge.
@@ -449,44 +449,60 @@ def generate_random_graph(num_observables, num_unobservables, num_treatments,
     # 2. Establish a random topological ordering to guarantee acyclicity
     random.shuffle(all_observables)
     
-    # Initialize the graph and add all observable nodes
     G = nx.DiGraph()
     G.add_nodes_from(all_observables)
 
-    # Convert sparcity_constant to an equivalent edge probability.
-    # The original method considered d*(d-1) possible edges, while this constructive
-    # method considers d*(d-1)/2 possible edges. So, we double the probability
-    # to maintain the same expected number of edges.
     edge_prob = min(sparcity_constant * 2, 1.0)
 
     # 3. Add directed edges based on the ordering (guarantees a DAG)
     for i, node_u in enumerate(all_observables):
         for j, node_v in enumerate(all_observables):
-            # Only add edges from nodes that appear earlier in the shuffled list
-            # to nodes that appear later. This prevents cycles.
             if i < j:
                 if random.random() < edge_prob:
                     G.add_edge(node_u, node_v)
 
-    # 4. Add unobserved confounders
-    for i in range(num_unobservables):
-        if len(all_observables) > 1:
-            # Randomly select two observable nodes to be confounded
+    # 4. Add unobserved confounders (Corrected Logic)
+    confounded_pairs = set()
+    num_nodes = len(all_observables)
+    max_possible_confounders = num_nodes * (num_nodes - 1) // 2
+
+    # Ensure we don't request more confounders than possible unique pairs
+    if num_unobservables > max_possible_confounders:
+        print(f"Warning: Requested {num_unobservables} unobservables, but only {max_possible_confounders} unique pairs exist. Generating {max_possible_confounders}.")
+        num_unobservables = max_possible_confounders
+
+    # Use a while loop to find unique pairs to confound
+    max_tries = num_unobservables * 20  # Safety break to prevent infinite loops
+    tries = 0
+    while len(confounded_pairs) < num_unobservables and tries < max_tries:
+        tries += 1
+        if num_nodes > 1:
+            # Randomly select two observable nodes
             obs_pair = random.sample(all_observables, 2)
             
-            # Create a unique name for the unobserved node
-            u_var = f'U_{obs_pair[0]}_{obs_pair[1]}'
+            # Create a canonical (sorted) tuple to represent the pair
+            canonical_pair = tuple(sorted(obs_pair))
             
-            # Add the unobserved node and its edges to the two observables
+            # If this pair is already confounded, skip and try again
+            if canonical_pair in confounded_pairs:
+                continue
+            
+            # Store the new confounded pair
+            confounded_pairs.add(canonical_pair)
+
+            # Create a unique, canonical name for the unobserved node
+            u_var = f'U_{canonical_pair[0]}_{canonical_pair[1]}'
+            
+            # Add the unobserved node and its edges
             G.add_node(u_var)
-            G.add_edge(u_var, obs_pair[0])
-            G.add_edge(u_var, obs_pair[1])
+            G.add_edge(u_var, canonical_pair[0])
+            G.add_edge(u_var, canonical_pair[1])
 
-    # 5. Generate final outputs in the required format
-    # Generate node positions for visualization
+    if len(confounded_pairs) < num_unobservables:
+        print(f"Warning: Could only generate {len(confounded_pairs)} unique confounders after {max_tries} attempts.")
+
+    # 5. Generate final outputs
     node_positions = {node: (random.uniform(0, 100), random.uniform(0, 100)) for node in G.nodes()}
-
-    # Convert graph to dictionary format (adjacency list)
     graph_dict = {node: list(G.successors(node)) for node in G.nodes()}
 
     return [graph_dict, node_positions, treatments, outcomes]

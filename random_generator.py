@@ -126,22 +126,28 @@ def random_SCM_generator(num_observables, num_unobservables, num_treatments, num
 					return [scm, X, Y]
 
 def get_adjacency_string(G: nx.DiGraph) -> bytes:
-    """
-    Creates a unique, hashable byte string representing the graph's
-    adjacency matrix with nodes in a fixed sorted order.
-    """
-    # Get a sorted list of all node names to ensure a canonical order
-    sorted_nodes = sorted(list(G.nodes()))
-    # Generate the numpy adjacency matrix in that specific order
-    adj_matrix = nx.to_numpy_array(G, nodelist=sorted_nodes)
-    # Convert the numpy array to a compact byte string to be stored in a set
-    return adj_matrix.tobytes()
+	"""
+	Creates a unique, hashable byte string representing the graph's
+	adjacency matrix with nodes in a fixed sorted order.
+	"""
+	# Get a sorted list of all node names to ensure a canonical order
+	sorted_nodes = sorted(list(G.nodes()))
+	# Generate the numpy adjacency matrix in that specific order
+	adj_matrix = nx.to_numpy_array(G, nodelist=sorted_nodes)
+	# Convert the numpy array to a compact byte string to be stored in a set
+	return adj_matrix.tobytes()
 
 def random_graph_generator(num_observables, num_unobservables, num_treatments, num_outcomes, **kwargs):
 	''' Random graph generator '''
 	# The main seed makes the sequence of generated graphs reproducible.
 	main_seed = kwargs.get('seednum', 123)
 	master_rng = random.Random(main_seed)
+ 
+	# Bound the num_unobservables 
+	max_unobservables = num_observables * (num_observables - 1) // 2
+	if num_unobservables > max_unobservables:
+		num_unobservables = max_unobservables
+	
 
 	# --- Parameters for search control ---
 	max_graphs_to_test = kwargs.get('max_graphs', 1e7)
@@ -187,7 +193,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 			if kwargs.get('sparcity_constant') is None:
 				np.random.seed(graph_seed)
 				sparcity_constant = np.random.uniform(0.0, 1.0)
-    
+	
 			[graph_dict, node_positions, X, Y] = graph.generate_random_graph(
 				num_observables=num_observables,
 				num_unobservables=num_unobservables,
@@ -213,7 +219,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 			print(f"Unique graphs tested: {graphs_tested} | Consecutive duplicates: {consecutive_duplicates}   ", end='\r')
 
 			# --- Filtering Logic (your original logic was correct here) ---
-			id_status = identify.ID_return_Ctree(G, X, Y)[0]
+			id_status = identify.ID_return_Ctree(G, X, Y)[0] # 0: unID, 1: ID, -1: trivialID 
 	
 			if condition_ID is None:
 				print(f"\nFound graph after testing {graphs_tested} unique graphs.")
@@ -222,7 +228,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 			if id_status == -1:
 				continue
 			elif id_status == 0:
-				if condition_ID is False:
+				if condition_ID is not None and condition_ID is False:
 					print(f"\nFound non-identifiable graph after testing {graphs_tested} unique graphs.")
 					return [graph_dict, node_positions, X, Y]
 				else:
@@ -282,22 +288,107 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 	print("\nAll search attempts failed to find a matching graph.")
 	return None
 
+def find_graph_by_search(max_observables, max_unobservables, num_treatments, num_outcomes, **kwargs):
+	"""
+	Searches for a graph that satisfies the given criteria by iterating through
+	different numbers of observable and unobservable nodes.
+
+	This function acts as a manager, calling the `random_graph_generator` worker
+	with different parameters until a suitable graph is found.
+
+	Parameters:
+	- max_observables (int): The maximum number of total observable nodes (V, X, Y).
+	- max_unobservables (int): The maximum number of unobserved confounders.
+	- num_treatments (int): The fixed number of treatment variables (X).
+	- num_outcomes (int): The fixed number of outcome variables (Y).
+	- **kwargs: All other condition flags (e.g., condition_ID=True) to be passed
+				down to the worker function.
+	"""
+	min_observables = kwargs.get('min_observables',num_treatments + num_outcomes)
+	if max_observables < min_observables:
+		print(f"Error: max_observables ({max_observables}) cannot be less than the min_observables ({min_observables}).")
+		return None
+
+	min_unobservables = kwargs.get('min_unobservables',0)
+	if max_unobservables < min_unobservables:
+		print(f"Error: max_observables ({max_unobservables}) cannot be less than the min_unobservables ({min_unobservables}).")
+		return None
+
+	print("--- Starting Graph Search ---")
+	
+	# Iterate through the number of observable nodes, from simplest to most complex
+	for n_obs in range(min_observables, max_observables + 1):
+		# --- IMPROVED LOGIC ---
+		# Calculate the theoretical maximum number of unobservables for n_obs nodes (n_obs choose 2).
+		max_possible_unobs_for_n_obs = n_obs * (n_obs - 1) // 2
+		
+		
+		# The actual upper bound for the inner loop is the smaller of the user-defined max
+		# and the theoretical max for the current number of observables.
+		actual_max_unobs = min(max_unobservables, max_possible_unobs_for_n_obs)
+
+		# Iterate through the number of unobservable nodes up to the calculated limit
+		for n_unobs in range(min_unobservables, actual_max_unobs + 1):
+			print(f"\nSearching with Parameters: N_obs={n_obs}, N_unobs={n_unobs} (Max possible for N_obs={n_obs} is {max_possible_unobs_for_n_obs})")
+			
+			# Call the worker function with the current parameters
+			result = random_graph_generator(
+				num_observables=n_obs,
+				num_unobservables=n_unobs,
+				num_treatments=num_treatments,
+				num_outcomes=num_outcomes,
+				**kwargs
+			)
+			
+			# If the worker found a graph that matches all criteria, we're done!
+			if result is not None:
+				print("\n--- Search Successful! ---")
+				print(f"Found matching graph with N_obs={n_obs}, N_unobs={n_unobs}")
+				return result
+
+	# If the loops complete without finding a graph, the search has failed
+	print("\n--- Search Failed ---")
+	print("Could not find a graph matching the criteria within the specified parameter ranges.")
+	return None
 
 
 if __name__ == "__main__":
 	seednum = 190602
 	np.random.seed(seednum)
 	random.seed(seednum)
-	result = random_graph_generator(num_observables = 4, num_unobservables = 4, num_treatments = 2, num_outcomes = 1, 
-																			condition_ID = True, 
-																			# condition_BD = True, 
-																			condition_mSBD = True, 
-																			# condition_FD = False, 
-																			# condition_Tian = True, 
-																			condition_gTian = False, 
-																			# condition_product = False, 
-																			seednum = seednum)
-	# Check if the search was successful before unpacking
+ 
+	result = find_graph_by_search(
+		min_observables=3,      # Min total observables (V+X+Y)
+		max_observables=4,      # Max total observables (V+X+Y)
+		min_unobservables=1,		# Min total unobservables 
+		max_unobservables=3,    # Max unobservables
+		num_treatments=2,       # Fixed number of treatments
+		num_outcomes=1,         # Fixed number of outcomes
+		condition_ID=True,
+		condition_BD=False,
+		condition_mSBD=False,
+		condition_FD=False,
+		condition_Tian=False,
+		condition_gTian=False,
+		condition_product=False,
+		seednum=seednum
+	)
+ 
+	# result = random_graph_generator(
+	#  			num_observables = 4, 
+	#     		num_unobservables = 2, 
+	#       		num_treatments = 1, 
+	#         	num_outcomes = 1, 
+	# 			# condition_ID = True, 
+	# 			# condition_BD = True, 
+	# 			# condition_mSBD = True, 
+	# 			condition_FD = True, 
+	# 			# condition_Tian = False, 
+	# 			# condition_gTian = False, 
+	# 			# condition_product = False, 
+	# 			seednum = seednum)
+	
+ 	#Check if the search was successful before unpacking
 	if result is None:
 	 	# Handle the failure case
 		print("Search failed to find a matching graph.")
