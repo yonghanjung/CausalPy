@@ -56,7 +56,7 @@ def random_SCM_generator(num_observables, num_unobservables, num_treatments, num
 	sparcity_constant = 0.75
 	
 	while 1:
-		scm.generate_random_scm_test(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant, seednum, discrete )
+		scm.generate_random_scm(num_observables, num_unobservables, num_treatments, num_outcomes, sparcity_constant, seednum, discrete )
 		G = scm.graph
 		X = [v for v in G.nodes if v.startswith('X')]
 		Y = [v for v in G.nodes if v.startswith('Y')]
@@ -358,19 +358,19 @@ if __name__ == "__main__":
 	random.seed(seednum)
  
 	result = find_graph_by_search(
-		min_observables=3,      # Min total observables (V+X+Y)
-		max_observables=4,      # Max total observables (V+X+Y)
-		min_unobservables=1,		# Min total unobservables 
+		min_observables=4,      # Min total observables (V+X+Y)
+		max_observables=6,      # Max total observables (V+X+Y)
+		min_unobservables=0,		# Min total unobservables 
 		max_unobservables=3,    # Max unobservables
-		num_treatments=2,       # Fixed number of treatments
+		num_treatments=1,       # Fixed number of treatments
 		num_outcomes=1,         # Fixed number of outcomes
 		condition_ID=True,
-		condition_BD=False,
-		condition_mSBD=False,
-		condition_FD=False,
+		# condition_BD=False,
+		# condition_mSBD=False,
+		# condition_FD=False,
 		condition_Tian=False,
-		condition_gTian=False,
-		condition_product=False,
+		# condition_gTian=False,
+		condition_product=True,
 		seednum=seednum
 	)
  
