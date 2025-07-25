@@ -101,7 +101,8 @@ def run_comparison(d, n_samples, timeout):
     print(f"Ground Truth (from Modeling Method): {ground_truth:.4f}")
 
     # 2. Test each method and compare to the new ground truth
-    methods = {"Naive Summation": naive_summation, "Empirical Summation": empirical_summation}
+    # methods = {"Naive Summation": naive_summation, "Empirical Summation": empirical_summation}
+    methods = {"Empirical Summation": empirical_summation, "Modeling (g-comp)": modeling_summation}
     results = {}
     
     # Store the modeling result first
@@ -116,7 +117,8 @@ def run_comparison(d, n_samples, timeout):
     print(f"{'Method':<25} | {'Estimated':<18} | {'Acc':<18} | {'Time (s)':<20}")
     print("-" * 80)
     # Ensure a consistent order
-    order = ["Naive Summation", "Empirical Summation", "Modeling (g-comp)"]
+    # order = ["Naive Summation", "Empirical Summation", "Modeling (g-comp)"]
+    order = ["Empirical Summation", "Modeling (g-comp)"]
     for method in order:
         res = results[method]
         val_str = f"{res['Value']:.4f}" if isinstance(res['Value'], float) else str(res['Value'])
@@ -126,4 +128,4 @@ def run_comparison(d, n_samples, timeout):
 
 # --- Scenarios ---
 # Using a large d to highlight the differences
-run_comparison(d=2, n_samples=50000, timeout=3)
+run_comparison(d=10, n_samples=5000, timeout=3)

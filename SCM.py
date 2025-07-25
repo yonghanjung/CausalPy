@@ -273,7 +273,7 @@ if __name__ == "__main__":
 	# 3. Visualize the graph structure
 	print("\n--- 3. Visualizing the graph ---")
 	try:
-		scm_test.visualize_interactive(filename="test_scm_graph.html")
+		graph.visualize_interactive(scm_test.graph)
 	except Exception as e:
 		print(f"An error occurred during visualization: {e}")
 

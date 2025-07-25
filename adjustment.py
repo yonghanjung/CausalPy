@@ -1,4 +1,3 @@
-import networkx as nx
 import graph 
 
 def proper_causal_path(G, X, Y):

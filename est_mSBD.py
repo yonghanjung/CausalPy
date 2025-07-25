@@ -12,7 +12,7 @@ import random
 import time 
 from tabulate import tabulate
 
-
+import SCM 
 import random_generator
 import graph
 import identify
@@ -1012,7 +1012,8 @@ if __name__ == "__main__":
 	np.random.seed(seednum)
 	random.seed(seednum)
 
-	scm, X, Y = random_generator.random_SCM_generator(
+
+	result = random_generator.random_graph_generator(
 		num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
 		condition_ID=True, 
 		condition_BD=False, 
@@ -1021,11 +1022,11 @@ if __name__ == "__main__":
 		condition_Tian=True, 
 		condition_gTian=True,
 		condition_product = True, 
-		discrete = False, 
 		seednum = seednum 
 	)
+	graph_dict, node_positions, X, Y = result
+ 
 
-	G = scm.graph
 	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
 	topo_V = graph.find_topological_order(G)
 	obs_data = scm.generate_samples(10000)[topo_V]

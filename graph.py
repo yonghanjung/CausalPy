@@ -3,11 +3,8 @@ from pyvis.network import Network # Added import
 import networkx as nx
 import matplotlib.pyplot as plt
 import random
-import itertools
 import copy
-import adjustment
 from collections import deque
-
 
 def visualize(graph):
 	''' Visualize the causal graph (in a form of nx.DiGraph) with colored nodes for treatments and outcomes. '''
