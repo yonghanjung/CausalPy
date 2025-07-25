@@ -725,6 +725,19 @@ def unfold_graph_from_data(G, clustered_list, obs_data):
 	
 	return G_new
 
+def graph_to_graphdict(G: nx.DiGraph) -> dict:
+    """
+    Converts a networkx DiGraph object to a dictionary representation.
+
+    **Parameters:**
+    - G (nx.DiGraph): The input graph.
+
+    **Returns:**
+    - dict: A dictionary where each key is a node and the value is a list
+            of its successor nodes (children).
+    """
+    return {node: list(G.successors(node)) for node in G.nodes()}
+
 
 # --- Example Usage (can be added to the bottom of graph.py for testing) ---
 if __name__ == '__main__':
