@@ -316,11 +316,16 @@ if __name__ == "__main__":
         max_observables=6,
         min_unobservables=1,
         max_unobservables=4,
-        num_treatments=1,
+        num_treatments=2,
         num_outcomes=1,
         condition_ID=True,
-        condition_BD=False, # Let's find a graph that is NOT backdoor adjustable
-        seednum=seednum
+        # condition_BD=True,
+		# condition_mSBD=True,
+		condition_FD=True,
+		# condition_Tian=False,
+		condition_gTian=False,
+		condition_product=True,
+		seednum=seednum
     )
  
 	# result = find_graph_by_search(
@@ -362,9 +367,9 @@ if __name__ == "__main__":
 		scm, X, Y = result
 		# graph_dict, node_positions, X, Y = result
 		# Now you can proceed with the graph...
-		print("Successfully found a graph!")
-
-		G = graph.create_acyclic_graph(graph_dict=graph_dict, an_Y_graph_TF = False, Y = None, node_positions = node_positions)
+		print("Successfully found a SCM!")
+		G = scm.graph
+		graph_dict = graph.graph_to_graphdict(G)
 
 		# Generate the random SCM 
 		# [scm, X, Y] = random_generator.Random_SCM_Generator(num_observables = 5, num_unobservables = 3, num_treatments = 2, num_outcomes = 1, 

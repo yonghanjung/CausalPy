@@ -682,48 +682,93 @@ def find_predecessors(G,W,topo_V = None):
 		topo_V = find_topological_order(G)
 	W = sorted(W, key=lambda x: topo_V.index(x))
 	return(topo_V[:topo_V.index(W[0])])
-	
 
-def unfold_graph_from_data(G, clustered_list, obs_data):
-	"""
-	Combines building the clustered dictionary from the observation data
-	and unfolding the graph G accordingly.
+def expand_variables(variable_list, cluster_map):
+    """Expands conceptual cluster nodes into their full list of column names."""
+    if not variable_list or not cluster_map:
+        return variable_list
 
-	Parameters:
-	  G: A networkx graph.
-	  clustered_list: List of base variable names (e.g., ['C', 'Z']).
-	  obs_data: A pandas DataFrame with the actual component column names.
+    expanded_list = []
+    for var in variable_list:
+        # If var is a cluster name, extend the list with its columns
+        if var in cluster_map:
+            expanded_list.extend(cluster_map[var])
+        # Otherwise, it's a regular variable
+        else:
+            expanded_list.append(var)
+    return expanded_list
 
-	Returns:
-	  G_new: The unfolded graph.
-	"""
-	# Build the clustered dictionary
-	clustered = {}
-	for var in clustered_list:
-		components = [col for col in obs_data.columns if col.startswith(var)]
-		try:
-			components.sort(key=lambda x: int(x[len(var):]))
-		except ValueError:
-			components.sort()
-		clustered[var] = components
+def build_cluster_map(conceptual_nodes, obs_data):
+    """
+    Automatically builds a cluster map dictionary by scanning DataFrame columns.
+
+    This function uses a 'startswith' naming convention to find component columns
+    for each conceptual node.
+
+    Parameters:
+      conceptual_nodes: A list of base variable names that might be clusters (e.g., ['C', 'Z']).
+      obs_data: A pandas DataFrame.
+
+    Returns:
+      A dictionary mapping conceptual nodes to their component columns.
+      e.g., {'C': ['C1', 'C2', 'C10'], 'Z': ['Z1', 'Z2']}
+    """
+    cluster_map = {}
+    for node in conceptual_nodes:
+        # Find all columns that start with the node name, but are not the node name itself
+        components = [col for col in obs_data.columns if col.startswith(node) and col != node]
+        
+        if components:
+            # Optional: a more robust way to sort numeric suffixes
+            try:
+                components.sort(key=lambda x: int(x[len(node):]))
+            except ValueError:
+                components.sort() # Fallback to alphabetical sort
+            
+            cluster_map[node] = components
+            
+    return cluster_map
+
+# def unfold_graph_from_data(G, clustered_list, obs_data):
+# 	"""
+# 	Combines building the clustered dictionary from the observation data
+# 	and unfolding the graph G accordingly.
+
+# 	Parameters:
+# 	  G: A networkx graph.
+# 	  clustered_list: List of base variable names (e.g., ['C', 'Z']).
+# 	  obs_data: A pandas DataFrame with the actual component column names.
+
+# 	Returns:
+# 	  G_new: The unfolded graph.
+# 	"""
+# 	# Build the clustered dictionary
+# 	clustered = {}
+# 	for var in clustered_list:
+# 		components = [col for col in obs_data.columns if col.startswith(var)]
+# 		try:
+# 			components.sort(key=lambda x: int(x[len(var):]))
+# 		except ValueError:
+# 			components.sort()
+# 		clustered[var] = components
 	
-	# Unfold the graph using the constructed dictionary
-	G_new = nx.DiGraph() if G.is_directed() else nx.Graph()
-	for node in G.nodes():
-		if node in clustered:
-			for comp in clustered[node]:
-				G_new.add_node(comp)
-		else:
-			G_new.add_node(node)
+# 	# Unfold the graph using the constructed dictionary
+# 	G_new = nx.DiGraph() if G.is_directed() else nx.Graph()
+# 	for node in G.nodes():
+# 		if node in clustered:
+# 			for comp in clustered[node]:
+# 				G_new.add_node(comp)
+# 		else:
+# 			G_new.add_node(node)
 	
-	for u, v in G.edges():
-		u_nodes = clustered.get(u, [u])
-		v_nodes = clustered.get(v, [v])
-		for u_comp in u_nodes:
-			for v_comp in v_nodes:
-				G_new.add_edge(u_comp, v_comp)
+# 	for u, v in G.edges():
+# 		u_nodes = clustered.get(u, [u])
+# 		v_nodes = clustered.get(v, [v])
+# 		for u_comp in u_nodes:
+# 			for v_comp in v_nodes:
+# 				G_new.add_edge(u_comp, v_comp)
 	
-	return G_new
+# 	return G_new
 
 def graph_to_graphdict(G: nx.DiGraph) -> dict:
     """

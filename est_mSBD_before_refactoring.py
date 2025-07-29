@@ -21,7 +21,6 @@ import frontdoor
 import mSBD
 import tian
 import statmodules
-import example_SCM
 
 # Turn off alarms
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -47,116 +46,100 @@ def add_cluster_to_vec(cluster_variables, vec):
 def xgb_predict(model, data, col_feature):
 	return model.predict(xgb.DMatrix(data[col_feature]))
 
-def estimate_BD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, seednum=123, only_OM=False):
-    """
-    Estimates causal effects using the backdoor adjustment criterion.
+def estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False, **kwargs):
+	cluster_variables = kwargs.get('cluster_variables', None)
 
-    This function identifies the minimum adjustment set Z and computes the average
-    treatment effect (ATE) using Double Machine Learning (DML) with cross-fitting.
-    It provides estimates for Outcome Model (OM), Inverse Probability Weighting (IPW),
-    and Doubly Robust (DML/AIPW) estimators.
+	np.random.seed(int(seednum))
+	random.seed(int(seednum))
 
-    Parameters:
-    G : Causal graph structure.
-    X : List of treatment variables.
-    Y : List of outcome variables.
-    obs_data : Observed data (Pandas DataFrame).
-    alpha_CI : Confidence level for interval estimates (default 0.05).
-    cluster_map : Dictionary mapping conceptual nodes to column names (default None).
-    n_folds : Number of folds for cross-fitting (default 2).
-    seednum : Random seed for reproducibility (default 123).
-    only_OM : If True, only computes the Outcome Model estimate (default False).
+	G_new = graph.unfold_graph_from_data(G, cluster_variables, obs_data)
 
-    Returns:
-    A tuple containing dictionaries for ATE, Variance, Lower CI, and Upper CI.
-    """
-    # 1. --- Initial Setup ---
-    np.random.seed(int(seednum))
-    random.seed(int(seednum))
+	topo_V = graph.find_topological_order(G_new)
+	Z = adjustment.construct_minimum_adjustment_set(G_new, X, Y)
 
-    Z = adjustment.construct_minimum_adjustment_set(G, X, Y)
-    Z_unfold = graph.expand_variables(Z, cluster_map)
-    X_unfold = graph.expand_variables(X, cluster_map)
-    X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
 
-    list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
-    results = {est: {'ATE': {}, 'VAR': {}} for est in list_estimators}
+	z_score = norm.ppf(1 - alpha_CI / 2)
 
-    # 2. --- Estimation Logic ---
-    if not Z:
-        # Case 1: No confounding, simple stratified estimation
-        for _, x_val_row in X_values_combinations.iterrows():
-            x_val = tuple(x_val_row)
-            mask = (obs_data[X] == x_val_row.values).all(axis=1)
-            mean_val = obs_data.loc[mask, Y].mean().iloc[0]
-            var_val = obs_data.loc[mask, Y].var().iloc[0]
-            for est in list_estimators:
-                results[est]['ATE'][x_val] = mean_val
-                results[est]['VAR'][x_val] = var_val
-    else:
-        # Case 2: Confounding, use DML with cross-fitting
-        kf = KFold(n_splits=n_folds, shuffle=True, random_state=int(seednum))
-        col_feature = list(set(Z_unfold + X_unfold))
-        
-        mu_XZ_preds = np.zeros(len(obs_data))
-        mu_xZ_preds = {tuple(x_val): np.zeros(len(obs_data)) for _, x_val in X_values_combinations.iterrows()}
-        pi_XZ_preds = {tuple(x_val): np.zeros(len(obs_data)) for _, x_val in X_values_combinations.iterrows()}
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
 
-        for train_index, test_index in kf.split(obs_data):
-            obs_train, obs_test = obs_data.iloc[train_index], obs_data.iloc[test_index]
-            nuisance_mu = statmodules.learn_mu(obs_train, col_feature, Y, params=None)
-            mu_XZ_preds[test_index] = xgb_predict(nuisance_mu, obs_test, col_feature)
+	ATE = {}
+	VAR = {}
+	lower_CI = {}
+	upper_CI = {}
 
-            for _, x_val_row in X_values_combinations.iterrows():
-                x_val_tuple = tuple(x_val_row)
-                obs_test_x = obs_test.copy()
-                obs_test_x[X] = x_val_row.values
-                
-                mu_xZ = xgb_predict(nuisance_mu, obs_test_x, col_feature)
-                mu_xZ_preds[x_val_tuple][test_index] = mu_xZ
+	for estimator in list_estimators:
+		ATE[estimator] = {}
+		VAR[estimator] = {}
+		lower_CI[estimator] = {}
+		upper_CI[estimator] = {}
 
-                if not only_OM:
-                    obs_test_temp = obs_test.copy()
-                    obs_test_temp['mu_xZ'] = mu_xZ
-                    obs_test_temp['mu_XZ'] = mu_XZ_preds[test_index]
-                    pi_XZ = statmodules.entropy_balancing_osqp(
-                        obs=obs_test_temp, x_val=x_val_row.values, X=X, Z=Z_unfold,
-                        col_feature_1='mu_xZ', col_feature_2='mu_XZ'
-                    )
-                    pi_XZ_preds[x_val_tuple][test_index] = pi_XZ
-        
-        # --- REFACTORED BLOCK ---
-        # Compute final estimates for each estimator using a single loop
-        Yvec = obs_data[Y].values.flatten()
-        for _, x_val_row in X_values_combinations.iterrows():
-            x_val = tuple(x_val_row)
-            
-            # Define the final "outcome" vector for each estimator
-            estimator_outcomes = {
-                'OM': mu_xZ_preds[x_val],
-                'IPW': pi_XZ_preds[x_val] * Yvec,
-                'DML': mu_xZ_preds[x_val] + pi_XZ_preds[x_val] * (Yvec - mu_XZ_preds)
-            }
-            
-            # Loop through the desired estimators and calculate results
-            for est in list_estimators:
-                final_outcome_vec = estimator_outcomes[est]
-                results[est]['ATE'][x_val] = np.mean(final_outcome_vec)
-                results[est]['VAR'][x_val] = np.var(final_outcome_vec)
+	# Compute causal effect estimations
+	if not Z:
+		for estimator in list_estimators:
+			for _, x_val in X_values_combinations.iterrows():
+				mask = (obs_data[X] == x_val.values).all(axis=1)
+				ATE[estimator][tuple(x_val)] = obs_data.loc[mask, Y].mean().iloc[0]
+				VAR[estimator][tuple(x_val)] = obs_data.loc[mask, Y].var().iloc[0]
+	else:
+		L = 2
+		kf = KFold(n_splits=L, shuffle=True)
+		col_feature = list(set(Z + X))
+		col_label = Y
 
-    # 3. --- Calculate Confidence Intervals ---
-    ATE, VAR = {k: v['ATE'] for k, v in results.items()}, {k: v['VAR'] for k, v in results.items()}
-    lower_CI, upper_CI = {est: {} for est in list_estimators}, {est: {} for est in list_estimators}
-    z_score = norm.ppf(1 - alpha_CI / 2)
-    n_samples = len(obs_data)
+		for train_index, test_index in kf.split(obs_data):
+			obs_train, obs_test = obs_data.iloc[train_index], obs_data.iloc[test_index]
+			nuisance_mu = statmodules.learn_mu(obs_train, col_feature, col_label, params=None)
+			mu_XZ = xgb_predict(nuisance_mu, obs_test, col_feature)
 
-    for est in list_estimators:
-        for x_val, ate_val in ATE[est].items():
-            std_err = (VAR[est][x_val] / n_samples) ** 0.5
-            lower_CI[est][x_val] = ate_val - z_score * std_err
-            upper_CI[est][x_val] = ate_val + z_score * std_err
+			for _, x_val in X_values_combinations.iterrows():
+				obs_test_x = copy.copy(obs_test)
+				obs_test_x[X] = x_val.values
+				mu_xZ = xgb_predict(nuisance_mu, obs_test_x, col_feature)
+				obs_test.loc[:, 'mu_xZ'] = mu_xZ
+				obs_test.loc[:, 'mu_XZ'] = mu_XZ
+				if only_OM: 
+					OM_est = np.mean(mu_xZ) 
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_est
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['mu_xZ'] - OM_est) ** 2 )
 
-    return ATE, VAR, lower_CI, upper_CI
+				else:
+					pi_XZ = statmodules.entropy_balancing_osqp(obs = obs_test, 
+															x_val = x_val.values, 
+															X = X, 
+															Z = Z, 
+															col_feature_1 = 'mu_xZ', 
+															col_feature_2 = 'mu_XZ')
+
+					OM_est = np.mean(mu_xZ) 
+					ATE["OM"][tuple(x_val)] = ATE["OM"].get(tuple(x_val), 0) + OM_est
+					VAR["OM"][tuple(x_val)] = VAR["OM"].get(tuple(x_val), 0) + np.mean( (obs_test['mu_xZ'] - OM_est) ** 2 )
+
+					Yvec = (obs_test[Y].values.flatten())
+					PW_est = np.mean(pi_XZ * Yvec)
+					ATE["IPW"][tuple(x_val)] = ATE["IPW"].get(tuple(x_val), 0) + PW_est
+					VAR["IPW"][tuple(x_val)] = VAR["IPW"].get(tuple(x_val), 0) + np.mean( (pi_XZ * Yvec - PW_est) ** 2 )
+
+					# AIPW_est = OM_est + PW_est - np.mean( pi_XZ * mu_XZ )
+					AIPW_pseudo_outcome = mu_xZ + pi_XZ * (Yvec - mu_XZ)
+					AIPW_est = np.mean( AIPW_pseudo_outcome )
+					ATE["DML"][tuple(x_val)] = ATE["DML"].get(tuple(x_val), 0) + AIPW_est
+					VAR["DML"][tuple(x_val)] = VAR["DML"].get(tuple(x_val), 0) + np.mean( (AIPW_pseudo_outcome - AIPW_est) ** 2 )
+
+		for _, x_val in X_values_combinations.iterrows():
+			for estimator in list_estimators:
+				ATE[estimator][tuple(x_val)] /= L
+				VAR[estimator][tuple(x_val)] /= L
+
+	for _, x_val in X_values_combinations.iterrows():
+		for estimator in list_estimators:
+			mean_ATE_x = ATE[estimator][tuple(x_val)]
+			lower_x = (mean_ATE_x - z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			upper_x = (mean_ATE_x + z_score * VAR[estimator][tuple(x_val)] * (len(obs_data) ** (-1/2)) )
+			lower_CI[estimator][tuple(x_val)] = lower_x
+			upper_CI[estimator][tuple(x_val)] = upper_x
+
+	return ATE, VAR, lower_CI, upper_CI
 
 def estimate_mSBD(G, X, Y, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False, **kwargs): 
 	"""
@@ -1028,19 +1011,29 @@ if __name__ == "__main__":
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
 	random.seed(seednum)
- 
-	d = 10 
-	scm, X, Y = example_SCM.BD_SCM(d)
-	G = scm.graph
-	obs_data = scm.generate_samples(100000)
- 
-	# 2. AUTOMATICALLY build the map
-	cluster_map = graph.build_cluster_map(graph.find_topological_order(G),obs_data)
- 
-	# print("Automatically detected cluster map:")
 
-	print( identify.causal_identification(G,X,Y, latex = False, copyTF=True) )
+
+	result = random_generator.random_graph_generator(
+		num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
+		condition_ID=True, 
+		condition_BD=False, 
+		condition_mSBD=True, 
+		condition_FD=False, 
+		condition_Tian=True, 
+		condition_gTian=True,
+		condition_product = True, 
+		seednum = seednum 
+	)
+	graph_dict, node_positions, X, Y = result
  
+
+	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
+	topo_V = graph.find_topological_order(G)
+	obs_data = scm.generate_samples(10000)[topo_V]
+
+	print(obs_data)
+	print(identify.causal_identification(G, X, Y, False))
+
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
 	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
@@ -1049,14 +1042,14 @@ if __name__ == "__main__":
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 
 	y_val = np.ones(len(Y)).astype(int)
-	truth = statmodules.ground_truth(scm, X, Y, y_val)
+	truth = statmodules.ground_truth(scm, obs_data, X, Y, y_val)
 
 	start_time = time.process_time()
-	ATE, VAR, lower_CI, upper_CI = estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, cluster_map = cluster_map)
+	ATE, VAR, lower_CI, upper_CI = estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False)
 	end_time = time.process_time()
 	print(f'Time with OSQP minimizer: {end_time - start_time}')
 
-	performance_table, rank_correlation_table, performance, rank_correlation_pvalue = statmodules.compute_performance(truth, ATE)
+	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
 	
 	print("Performance")
 	print(performance_table)
