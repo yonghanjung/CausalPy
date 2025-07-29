@@ -54,41 +54,7 @@ def ground_truth(scm, X, Y, yval):
 			truth[tuple(x_val)] = intv_data_y.loc[mask, 'IyY'].mean()
 		return truth 
 
-def entropy_balancing_booster_osqp(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=10, batch_size=100):
-	col_feature = X + Z
-	col_label = ['residual']
-	approximators = []
-	IxX = np.array((obs[X] == x_val).prod(axis=1))
-	mu_xZ = obs[col_feature_1]
-	mu_XZ = obs[col_feature_2]
-
-	# Determine the number of batches
-	n = len(obs)
-	B = min(int(np.ceil(n / batch_size)), B)
-		
-	# Shuffle the dataset
-	obs_shuffled = obs.sample(frac=1, random_state=123).reset_index(drop=True)
-
-	for i in range(B):
-		start_idx = i * batch_size
-		end_idx = min((i + 1) * batch_size, n)
-		obs_batch = obs_shuffled.iloc[start_idx:end_idx]
-		
-		W_opt_batch = entropy_balancing_osqp(obs_batch, x_val, X, Z, col_feature_1, col_feature_2)
-
-		if not approximators:  # First iteration
-			residual = W_opt_batch
-		else:
-			residual = W_opt_batch - sum(mu_i.predict(xgb.DMatrix(obs_batch[col_feature])) for mu_i in approximators)
-		
-		obs_batch.loc[:, 'residual'] = residual
-		mu_i = learn_mu(obs_batch, col_feature, col_label, params=None)
-		approximators.append(mu_i)
-	
-	W_project = sum(mu_i.predict(xgb.DMatrix(obs[col_feature])) for mu_i in approximators)
-	return W_project * IxX
-
-def entropy_balancing_osqp(obs, x_val, X, Z, col_feature_1='mu_xZ', col_feature_2='mu_XZ'):
+def entropy_balancing(obs, x_val, X, Z, col_feature_1='mu_xZ', col_feature_2='mu_XZ'):
 	# Get data
 	IxX = np.array((obs[X] == x_val).prod(axis=1))
 	n = len(obs)
@@ -133,93 +99,9 @@ def entropy_balancing_osqp(obs, x_val, X, Z, col_feature_1='mu_xZ', col_feature_
 
 	# Check the status of the solution
 	if res.info.status != 'solved' or W_opt is None or np.isnan(W_opt).any():
-		W_opt = entropy_balancing(obs, x_val, X, Z, col_feature_1, col_feature_2)
+		raise RuntimeError(f"OSQP failed to find a solution for entropy balancing. Status: {res.info.status}")
 
 	return W_opt
-
-
-def entropy_balancing_booster(obs, x_val, Z, X, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ', B=10, batch_size=100):
-	col_feature = X + Z
-	col_label = ['residual']
-	approximators = []
-	IxX = np.array((obs[X] == x_val).prod(axis=1))
-	mu_xZ = obs[col_feature_1]
-	mu_XZ = obs[col_feature_2]
-
-	# Determine the number of batches
-	n = len(obs)
-	B = min(int(np.ceil(n / batch_size)), B)
-		
-	# Shuffle the dataset
-	obs_shuffled = obs.sample(frac=1, random_state=123).reset_index(drop=True)
-
-	for i in range(B):
-		start_idx = i * batch_size
-		end_idx = min((i + 1) * batch_size, n)
-		obs_batch = obs_shuffled.iloc[start_idx:end_idx]
-		
-		W_opt_batch = entropy_balancing(obs_batch, x_val, X, Z, col_feature_1, col_feature_2)
-
-		if not approximators:  # First iteration
-			residual = W_opt_batch
-		else:
-			residual = W_opt_batch - sum(mu_i.predict(xgb.DMatrix(obs_batch[col_feature])) for mu_i in approximators)
-		
-		obs_batch.loc[:, 'residual'] = residual
-		mu_i = learn_mu(obs_batch, col_feature, col_label, params=None)
-		approximators.append(mu_i)
-	
-	W_project = sum(mu_i.predict(xgb.DMatrix(obs[col_feature])) for mu_i in approximators)
-	return W_project * IxX
-
-
-def entropy_balancing(obs, x_val, X, Z, col_feature_1 = 'mu_xZ', col_feature_2 = 'mu_XZ'):
-	# Define the objective function
-	def objective(W, IxX):
-		# Sum only for indices where X_i = 1
-		return np.sum(W * np.log(W))
-
-	# Define the constraints
-	def constraint1(W, IxX):
-		# \sum_{i=1}^{n} W_i X_i - n = 0
-		return np.sum(W * IxX) - n
-
-	# Define the Jacobian
-	def constraint1_jac(W, IxX):
-		# \sum_{i=1}^{n} W_i X_i - n = 0
-		return IxX
-
-	def constraint2(W, IxX, Cval1, Cval2):
-		# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
-		return np.sum(W * IxX * Cval1) - np.sum(Cval2)
-
-	def constraint2_jac(W, IxX, Cval1, Cval2):
-		# \sum_{i=1}^{n} W_i X_i f(C_i) - \sum_{i=1}^{n} f(C_i) = 0
-		return IxX * Cval1
-
-	IxX = np.array((obs[X] == x_val).prod(axis=1))
-	n = len(obs)
-	f_C = obs[Z].values
-	mu_xZ = obs[col_feature_1]
-	mu_XZ = obs[col_feature_2]
-
-	# Initial guess for W (should be positive and sum to n for X_i = 1)
-	W0 = np.ones(n) * np.sum(IxX) / n
-	# Ensure W0 is within bounds
-	W0 = np.clip(W0, 1e-10, None)
-
-	# Define the constraints in the format required by scipy.optimize.minimize
-	constraints = [{'type': 'eq', 'fun': constraint1, 'jac': constraint1_jac, 'args': (IxX,)}]
-	constraints.append({'type': 'eq', 'fun': constraint2, 'jac': constraint2_jac, 'args': (IxX, mu_XZ, mu_xZ)})
-
-	# Define bounds for W (W_i > 0)
-	bounds = [(1e-5, None) for _ in range(n)]
-
-	# Solve the optimization problem
-	result = minimize(objective, W0, args=(IxX,), bounds=bounds, constraints=constraints, method='SLSQP')
-	W_opt = result.x
-	return W_opt
-
 
 # Function to compute the confidence interval
 def mean_confidence_interval(data, confidence=0.95):
@@ -228,12 +110,6 @@ def mean_confidence_interval(data, confidence=0.95):
 	sem = stats.sem(data)
 	margin_of_error = sem * stats.t.ppf((1 + confidence) / 2., len(data) - 1)
 	return mean, margin_of_error
-
-# Extract error bars
-def extract_error_bars(data):
-	means = data
-	errors = ci_acc
-	return means, errors
 
 def add_noise(vec,add_noise_TF):
 	if add_noise_TF:

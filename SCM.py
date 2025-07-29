@@ -230,6 +230,28 @@ class StructuralCausalModel:
 
 		return pd.DataFrame(processed_dict)
 
+	def generate_observational_samples(self, num_samples, seed=None):
+		"""
+		Generates samples and returns only the observed variables.
+
+		This is a convenience wrapper around `generate_samples` that filters
+		out all unobserved exogenous variables (columns starting with 'U').
+
+		Parameters:
+			n_samples (int): The number of samples to generate.
+
+		Returns:
+			pandas.DataFrame: A DataFrame containing only the observed variables.
+		"""
+		full_data = self.generate_samples(num_samples)
+
+		# Filter out columns that start with 'U'
+		observational_cols = [
+			col for col in full_data.columns if not col.startswith('U')
+		]
+
+		return full_data[observational_cols]
+
 	def get_adjacency_matrix(self):
 		"""
 		Returns the adjacency matrix of the causal graph as a pandas DataFrame.
