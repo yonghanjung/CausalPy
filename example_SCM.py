@@ -230,51 +230,67 @@ def CCDDHNR2018_PLR(seednum=None, d=20, **kwargs):
 
 
 def mSBD_SCM_JCI(seednum = None, d=4):
-	if seednum is not None: 
-		random.seed(int(seednum))
-		np.random.seed(seednum)
+    if seednum is not None: 
+        random.seed(int(seednum))
+        np.random.seed(seednum)
 
-	def equation_C(noise, **kwargs):
-		num_samples = kwargs.get('num_sample', None)
-		return stats.multivariate_normal.rvs(mean = np.zeros(d), cov = np.eye(d), size=num_samples)
+    def equation_C(noise, **kwargs):
+        num_samples = kwargs.get('num_sample', None)
+        return stats.multivariate_normal.rvs(mean = np.zeros(d), cov = np.eye(d), size=num_samples)
 
-	def equation_X1(U_X1Z, C, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		coeffs = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
-		prob = inv_logit( np.dot(np.array(coeffs), np.array(C).T ) + U_X1Z + noise )
-		return np.random.binomial(1, prob)
+    def equation_X1(U_X1Z, C, noise, **kwargs):
+        num_samples = kwargs.pop('num_sample')
+        coeffs = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
+        prob = inv_logit( 5*np.dot(np.array(coeffs), np.array(C).T ) + U_X1Z + noise )
+        return np.random.binomial(1, prob)
 
-	def equation_Z(U_X1Z, U_ZY, C, X1, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		coeffs = [-1,1,-1] + [(i - 2) ** (-2) for i in range(4,d+1)]
-		prob = inv_logit( np.dot(np.array(coeffs), np.array(C).T) + (2*X1-1) * (U_X1Z + 2*U_ZY) + noise )
-		return prob
+    def equation_Z(U_X1Z, U_ZY, C, X1, noise, **kwargs):
+        num_samples = kwargs.pop('num_sample')
+        coeffs = [-1,1,-1] + [(i - 2) ** (-2) for i in range(4,d+1)]
+        prob = inv_logit( np.dot(np.array(coeffs), np.array(C).T) + (2*X1-1) * (U_X1Z + 2*U_ZY) + noise )
+        return prob
 
-	def equation_X2(X1, Z, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		prob = inv_logit( 2*X1-1 + Z + noise )
-		return np.random.binomial(1, prob)
+    def equation_X2(X1, Z, noise, **kwargs):
+        num_samples = kwargs.pop('num_sample')
+        prob = inv_logit( 2*X1-1 + 5*Z + noise )
+        return np.random.binomial(1, prob)
 
-	def equation_Y(U_ZY, C, X1, X2, noise, **kwargs):
-		num_samples = kwargs.pop('num_sample')
-		coeffs = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
-		prob = inv_logit( np.dot(np.array(coeffs), np.array(C).T ) + (2*X1-1) * U_ZY + (2*X2-1) * U_ZY + noise )
-		return np.random.binomial(1, prob)
+    def equation_Y(U_ZY, C, X1, X2, noise, **kwargs):
+        num_samples = kwargs.pop('num_sample')
+        coeffs = [1,-1,1] + [-(i - 2) ** (-2) for i in range(4,d+1)]
+        
+        # Convert binary X1, X2 (0,1) to (-1,1) for easier modeling
+        x1_mod = 2 * X1 - 1
+        x2_mod = 2 * X2 - 1
+
+        # Calculate the linear combination of predictors (the logit)
+        logit_prob = (
+            np.dot(np.array(coeffs), np.array(C).T) +  # Original effect of confounder C
+            4 * x1_mod * U_ZY +                         # Original interaction with unobserved confounder U_ZY
+            4 * x2_mod * U_ZY +                         # Original interaction with unobserved confounder U_ZY
+            5 * x1_mod +                                # --- NEW: Strong main effect for X1 ---
+            5 * x2_mod +                                # --- NEW: Strong main effect for X2 ---
+            -3 * x1_mod * x2_mod +                      # --- NEW: Interaction effect between X1 and X2 ---
+            noise                                       # Noise term
+        )
+        
+        prob = inv_logit(logit_prob)
+        return np.random.binomial(1, prob)
 
 
-	scm = StructuralCausalModel()
-	scm.add_unobserved_variable('U_X1Z', stats.norm(0, 1))
-	scm.add_unobserved_variable('U_ZY', stats.norm(0, 1))
-	scm.add_observed_variable('C', equation_C, [], stats.norm(0, 0.1))
-	scm.add_observed_variable('X1', equation_X1, ['U_X1Z', 'C'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Z', equation_Z, ['U_X1Z', 'U_ZY', 'C', 'X1'], stats.norm(0, 0.1))
-	scm.add_observed_variable('X2', equation_X2, ['X1', 'Z'], stats.norm(0, 0.1))
-	scm.add_observed_variable('Y', equation_Y, ['U_ZY', 'C', 'X1', 'X2'], stats.norm(0, 0.1))
+    scm = StructuralCausalModel()
+    scm.add_unobserved_variable('U_X1Z', stats.norm(0, 1))
+    scm.add_unobserved_variable('U_ZY', stats.norm(0, 1))
+    scm.add_observed_variable('C', equation_C, [], stats.norm(0, 0.1))
+    scm.add_observed_variable('X1', equation_X1, ['U_X1Z', 'C'], stats.norm(0, 0.1))
+    scm.add_observed_variable('Z', equation_Z, ['U_X1Z', 'U_ZY', 'C', 'X1'], stats.norm(0, 0.1))
+    scm.add_observed_variable('X2', equation_X2, ['X1', 'Z'], stats.norm(0, 0.1))
+    scm.add_observed_variable('Y', equation_Y, ['U_ZY', 'C', 'X1', 'X2'], stats.norm(0, 0.1))
 
-	X = ['X1', 'X2']
-	Y = ['Y']
+    X = ['X1', 'X2']
+    Y = ['Y']
 
-	return [scm, X, Y]
+    return [scm, X, Y]
 
 
 def mSBD_SCM(seednum = None, d=4):

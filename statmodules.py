@@ -19,6 +19,8 @@ from scipy.stats import norm
 
 import osqp
 from scipy import sparse
+from typing import Any, Union, Sequence
+
 
 def ground_truth(scm, X, Y, yval):
 	def randomized_equation(**args):
@@ -54,54 +56,67 @@ def ground_truth(scm, X, Y, yval):
 			truth[tuple(x_val)] = intv_data_y.loc[mask, 'IyY'].mean()
 		return truth 
 
-def entropy_balancing(obs, x_val, X, Z, col_feature_1='mu_xZ', col_feature_2='mu_XZ'):
-	# Get data
-	IxX = np.array((obs[X] == x_val).prod(axis=1))
-	n = len(obs)
-	mu_xZ = obs[col_feature_1].values
-	mu_XZ = obs[col_feature_2].values
-	
-	# Objective function setup (regularized quadratic form)
-	P = sparse.diags([1.0] * n)  # Identity matrix for W^T W (regularization term)
-	q = np.zeros(n)  # Linear term for the objective
-	
-	# Constraints
-	# Constraint 1: \sum W_i * IxX = n
-	A1 = sparse.csr_matrix(IxX.reshape(1, -1))  # Reshape into a 2D sparse matrix
-	l1 = np.array([n])       # Lower bound (equality, so l1 == u1)
-	u1 = np.array([n])       # Upper bound
-	
-	# Constraint 2: \sum W_i * IxX * f(C_i) = \sum f(C_i)
-	Cval1 = mu_XZ  # f(C_i)
-	Cval2 = mu_xZ
-	A2 = sparse.csr_matrix((IxX * Cval1).reshape(1, -1))  # Reshape into a 2D sparse matrix
-	l2 = np.array([np.sum(Cval2)])     # Lower bound (equality, so l2 == u2)
-	u2 = np.array([np.sum(Cval2)])     # Upper bound
-	
-	# Combine the constraints
-	A = sparse.vstack([A1, A2])  # Stack both constraint matrices vertically
-	l = np.hstack([l1, l2])      # Stack lower bounds
-	u = np.hstack([u1, u2])      # Stack upper bounds
-	
-	# Bounds for the decision variable W (W_i >= 1e-5)
-	W_lower_bound = 1e-5 * np.ones(n)
-	W_upper_bound = np.inf * np.ones(n)
-	
-	# OSQP solver setup
-	prob = osqp.OSQP()
-	prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False)
-	
-	# Solve the problem
-	res = prob.solve()
+def quadratic_balancing(obs, x_val, X, Z, col_feature_1='mu_xZ', col_feature_2='mu_XZ'):
+    # Get data and identify the target subgroup
+    # Note: This line assumes X is a list of columns, as in the original code.
+    IxX = np.array((obs[X] == x_val).prod(axis=1))
+    n = len(obs)
+    mu_xZ = obs[col_feature_1].values
+    mu_XZ = obs[col_feature_2].values
 
-	# Extract optimal W values
-	W_opt = res.x
+    # Find the indices and count of the target subgroup to solve a smaller problem
+    idx_treated = np.where(IxX == 1)[0]
+    m = len(idx_treated)
+    if m == 0:
+        raise ValueError("No observations found for the specified `x_val`.")
 
-	# Check the status of the solution
-	if res.info.status != 'solved' or W_opt is None or np.isnan(W_opt).any():
-		raise RuntimeError(f"OSQP failed to find a solution for entropy balancing. Status: {res.info.status}")
+    # --- Setup the Quadratic Program for the m-sized treated group ---
 
-	return W_opt
+    # Objective function: minimize (1/2) * w'w
+    P = sparse.diags([1.0] * m, format='csc')
+    q = np.zeros(m)
+
+    # --- Constraints ---
+
+    # Constraint 1: sum(w_i) = n
+    A1 = sparse.csr_matrix(np.ones((1, m)))
+    l1 = np.array([n])
+    u1 = np.array([n])
+
+    # Constraint 2: sum(w_i * moment_i) = sum(target_moment)
+    Cval1 = mu_XZ[idx_treated]
+    Cval2_sum = np.sum(mu_xZ)
+    A2 = sparse.csr_matrix(Cval1.reshape(1, -1))
+    l2 = np.array([Cval2_sum])
+    u2 = np.array([Cval2_sum])
+    
+    # Constraint 3: Non-negativity (w_i >= 1e-5)
+    # This is the key logical fix, applied correctly.
+    A3 = sparse.eye(m, format='csc')
+    l3 = np.full(m, 1e-5)
+    u3 = np.full(m, np.inf)
+    
+    # Combine constraints
+    A = sparse.vstack([A1, A2, A3], format='csc')
+    l = np.hstack([l1, l2, l3])
+    u = np.hstack([u1, u2, u3])
+    
+    # OSQP solver setup
+    prob = osqp.OSQP()
+    prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False)
+
+    # Solve the problem
+    res = prob.solve()
+
+    # Check the status of the solution
+    if res.info.status != 'solved':
+        raise RuntimeError(f"OSQP failed to find a solution. Status: {res.info.status}")
+    
+    # Place the optimized weights for the subgroup into a full-length vector
+    w_opt_full = np.zeros(n)
+    w_opt_full[idx_treated] = res.x
+
+    return w_opt_full
 
 # Function to compute the confidence interval
 def mean_confidence_interval(data, confidence=0.95):
@@ -110,6 +125,12 @@ def mean_confidence_interval(data, confidence=0.95):
 	sem = stats.sem(data)
 	margin_of_error = sem * stats.t.ppf((1 + confidence) / 2., len(data) - 1)
 	return mean, margin_of_error
+
+# Extract error bars
+def extract_error_bars(data):
+	means = data
+	errors = ci_acc
+	return means, errors
 
 def add_noise(vec,add_noise_TF):
 	if add_noise_TF:
