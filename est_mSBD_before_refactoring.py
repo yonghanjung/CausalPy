@@ -1011,29 +1011,19 @@ if __name__ == "__main__":
 	print(f'Random seed: {seednum}')
 	np.random.seed(seednum)
 	random.seed(seednum)
-
-
-	result = random_generator.random_graph_generator(
-		num_observables=6, num_unobservables=3, num_treatments=2, num_outcomes=1,
-		condition_ID=True, 
-		condition_BD=False, 
-		condition_mSBD=True, 
-		condition_FD=False, 
-		condition_Tian=True, 
-		condition_gTian=True,
-		condition_product = True, 
-		seednum = seednum 
-	)
-	graph_dict, node_positions, X, Y = result
  
+	d = 5 
+	scm, X, Y = example_SCM.mSBD_SCM_JCI(d)
+	G = scm.graph
+	obs_data = scm.generate_observational_samples(10000)
+ 
+	# 2. AUTOMATICALLY build the map
+	cluster_map = graph.build_cluster_map(graph.find_topological_order(G),obs_data)
+ 
+	# print("Automatically detected cluster map:")
 
-	G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
-	topo_V = graph.find_topological_order(G)
-	obs_data = scm.generate_samples(10000)[topo_V]
-
-	print(obs_data)
-	print(identify.causal_identification(G, X, Y, False))
-
+	print( identify.causal_identification(G,X,Y, latex = False, copyTF=True) )
+ 
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
 	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
@@ -1042,14 +1032,14 @@ if __name__ == "__main__":
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 
 	y_val = np.ones(len(Y)).astype(int)
-	truth = statmodules.ground_truth(scm, obs_data, X, Y, y_val)
+	truth = statmodules.ground_truth(scm, X, Y, y_val)
 
 	start_time = time.process_time()
-	ATE, VAR, lower_CI, upper_CI = estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False)
+	ATE, VAR, lower_CI, upper_CI = estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, cluster_map = cluster_map)
 	end_time = time.process_time()
 	print(f'Time with OSQP minimizer: {end_time - start_time}')
 
-	performance_table, rank_correlation_table = statmodules.compute_performance(truth, ATE)
+	performance_table, rank_correlation_table, performance, rank_correlation_pvalue = statmodules.compute_performance(truth, ATE)
 	
 	print("Performance")
 	print(performance_table)
