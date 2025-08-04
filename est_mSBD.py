@@ -164,7 +164,7 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, 
     This function implements a sequential estimation strategy based on the
     g-formula, providing estimates for the Outcome Model (OM), Inverse Probability
     Weighting (IPW), and Doubly Robust (DML/AIPW) estimators using
-    cross-fitting, following the structure of the `estimate_BD` function.
+    cross-fitting. This version uses sequential_quadratic_balancing for weights.
 
     Parameters:
     G : Causal graph structure.
@@ -192,18 +192,13 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, 
     if cluster_map:
         dict_Z = {k: graph.expand_variables(v, cluster_map) for k, v in dict_Z.items()}
         dict_X = {k: graph.expand_variables(v, cluster_map) for k, v in dict_X.items()}
-        # Create a reverse map for sorting expanded features
         for cluster_name, members in cluster_map.items():
             for member in members:
                 reverse_cluster_map[member] = cluster_name
 
-    # Collect every Z 
     all_Z = sorted(list(set(chain.from_iterable(dict_Z.values()))))
-    
-    # All possible values of X (e.g., [X1,X2] = {(0,0), (0,1), (1,0), (1,1)})
     X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Xi]) for Xi in X]), columns=X)
     
-    # List and Dict for collecting results 
     list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
     results = {est: {'ATE': {}, 'VAR': {}} for est in list_estimators}
     m = len(dict_X)
@@ -212,7 +207,6 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, 
     # 2. --- Estimation Logic ---
     if not all_Z:
         # Case 1: No confounding, simple stratified estimation
-        ## Then, simply E[Y | do(x)] = E[Y | x]
         for _, x_val_row in X_values_combinations.iterrows():
             x_val = tuple(x_val_row)
             mask = (obs_data[X] == x_val_row.values).all(axis=1)
@@ -222,127 +216,128 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, 
                 results[est]['ATE'][x_val] = mean_val
                 results[est]['VAR'][x_val] = var_val
     else:
-        # Case 2: Confounding, use sequential DML with cross-fitting
+        # --- Stage 1: Cross-fitting to estimate all moment functions (mu and check_mu) ---
         kf = KFold(n_splits=n_folds, shuffle=True, random_state=int(seednum))
 
-        # Collection of E[. | X^{(i)}, Z^{(i)}]
         mu_preds = {i: np.zeros(n_samples) for i in range(1, m + 1)}
-        
-        # Collection of E[. | xi, X^{(i-1)}, Z^{(i)}]
-        check_mu_preds = {} 
-        
-        # Collection of importance weighting param
-        pi_preds = {}
-        
+        check_mu_preds = {}
+        pi_preds = {} # Will be populated after moment estimation
+
         for _, x_val_row in X_values_combinations.iterrows():
             x_val_tuple = tuple(x_val_row)
-            # \check{\mu}^{i+1} = Y
             check_mu_preds[(m + 1, x_val_tuple)] = obs_data[Y].values.flatten()
             for i in range(1, m + 1):
                  check_mu_preds[(i, x_val_tuple)] = np.zeros(n_samples)
-                 if not only_OM:
-                     pi_preds[(i, x_val_tuple)] = np.zeros(n_samples)
-
 
         for train_index, test_index in kf.split(obs_data):
             obs_train, obs_test = obs_data.iloc[train_index], obs_data.iloc[test_index]
 
             for _, x_val_row in X_values_combinations.iterrows():
                 x_val_tuple = tuple(x_val_row)
-                
-                # \check{\mu}^{i+1} = Y for train 
-                check_mu_train_fold = {}
-                check_mu_train_fold[m + 1] = obs_train[Y].values.flatten()
+                check_mu_train_fold = {m + 1: obs_train[Y].values.flatten()}
 
-                # Collecting features to be regressed: X^{(i)}, Z^{(i)}
-                ## i = m, m-1, ...., 1
                 for i in range(m, 0, -1):
                     col_feature_i = []
                     for j in range(1, i + 1):
                         col_feature_i.extend(dict_X[f'X{j}'])
                         col_feature_i.extend(dict_Z[f'Z{j}'])
                     
-                    # FIX 1: Use a robust sort key that maps expanded nodes back to their conceptual parent
-                    ####### WE MAY NOT NEED THIS? #######
-                    def get_sort_key(node):
-                        base_node = reverse_cluster_map.get(node, node)
-                        return topo_V.index(base_node)
-                    col_feature_i = sorted(list(set(col_feature_i)), key=get_sort_key)
-                    #####################
+                    # def get_sort_key(node):
+                    #     base_node = reverse_cluster_map.get(node, node)
+                    #     return topo_V.index(base_node)
+                    # col_feature_i = sorted(list(set(col_feature_i)), key=get_sort_key)
                     
-                    # FIX 2: Add the pseudo-outcome label to the dataframe and use its name
-                    # \check{\mu}^{m+1} := Y, \check{\mu}^{m}, \check{\mu}^{m-1}, ... 
-                    label_data = check_mu_train_fold[i + 1] 
+                    label_data = check_mu_train_fold[i + 1]
                     label_col_name = f'pseudo_outcome_label_for_stage_{i+1}'
-                    obs_train[label_col_name] = label_data
+                    obs_train_temp = obs_train.copy()
+                    obs_train_temp[label_col_name] = label_data
                     
-                    # Learn E[\check{\mu}^{i+1} | X^{(i)}, Z^{(i)}] from "train data"
-                    ## Equivalently, E[ check_mu_train_fold | col_feature_i]
-                    nuisance_mu_i = statmodules.learn_mu(obs_train, col_feature_i, label_col_name, params=None)
-
-                    # Evaluate E[\check{\mu}^{i+1} | X^{(i)}, Z^{(i)}] from "test"
+                    nuisance_mu_i = statmodules.learn_mu(obs_train_temp, col_feature_i, label_col_name, params=None)
+                    
                     mu_preds[i][test_index] = xgb_predict(nuisance_mu_i, obs_test, col_feature_i)
                     
-                    # Fix X = x 
                     obs_test_x = obs_test.copy()
                     obs_test_x[dict_X[f'X{i}'][0]] = x_val_row[dict_X[f'X{i}'][0]]
-                    # \check{\mu}^{i} := E[\check{\mu}^{i+1} | xi, X^{(i-1)}, Z^{(i)}]
                     check_mu_preds[(i, x_val_tuple)][test_index] = xgb_predict(nuisance_mu_i, obs_test_x, col_feature_i)
                     
-                    # Evaluate \check{\mu}^{i} := E[\check{\mu}^{i+1} | xi, X^{(i-1)}, Z^{(i)}] from "Train"
                     obs_train_x = obs_train.copy()
                     obs_train_x[dict_X[f'X{i}'][0]] = x_val_row[dict_X[f'X{i}'][0]]
                     check_mu_train_fold[i] = xgb_predict(nuisance_mu_i, obs_train_x, col_feature_i)
 
-                    if not only_OM:
-                        # Set Xi, xi, {X^{(i-1)}, Z^{(i)}}
-                        X_i_vars, Z_i_vars = dict_X[f'X{i}'], list(set(col_feature_i) - set(dict_X[f'X{i}']))
-                        x_i_val = x_val_row[X_i_vars[0]]
+        # --- Stage 2: Compute Importance Weights Sequentially using full prediction vectors ---
+        if not only_OM:
+            for _, x_val_row in X_values_combinations.iterrows():
+                x_val_tuple = tuple(x_val_row)
+                
+                # Prepare a dataframe with the original data and all necessary moment predictions
+                obs_for_weights = obs_data.copy()
+                mu_col_names = []
+                check_mu_col_names = []
 
-                        # If {X^{(i-1)}, Z^{(i)}} = \emptyset => Q. Can we still use the balancing?
-                        if not Z_i_vars: 
-                            # Define I_{xi}(Xi)
-                            indicator = (obs_test[X_i_vars[0]] == x_i_val).astype(float)
-                            # prob = P(xi)
-                            prob = np.mean((obs_test[X_i_vars[0]] == x_i_val).astype(float))
-                            pi_i = indicator / prob if prob > 1e-10 else 0
-                        # Find the score s.t. \mu_i = \check_mu_i
-                        else:
-                            obs_test_temp = obs_test.copy()
-                            obs_test_temp['mu_i_pred'] = mu_preds[i][test_index]
-                            obs_test_temp['check_mu_i_pred'] = check_mu_preds[(i, x_val_tuple)][test_index]
-                            pi_i = statmodules.quadratic_balancing(
-                                obs=obs_test_temp, x_val=x_i_val, X=X_i_vars, Z=Z_i_vars,
-                                col_feature_1='check_mu_i_pred', col_feature_2='mu_i_pred')
-                        pi_preds[(i, x_val_tuple)][test_index] = pi_i
+                for i in range(1, m + 1):
+                    mu_col = f'mu_{i}_pred'
+                    check_mu_col = f'check_mu_{i}_{x_val_tuple}_pred'
+                    mu_col_names.append(mu_col)
+                    check_mu_col_names.append(check_mu_col)
+                    obs_for_weights[mu_col] = mu_preds[i]
+                    obs_for_weights[check_mu_col] = check_mu_preds[(i, x_val_tuple)]
 
-        # --- Compute Final Estimates from Full Prediction Vectors ---
+                # Call the sequential balancing function
+                all_pi_weights_dict = statmodules.sequential_quadratic_balancing(
+                    obs=obs_for_weights,
+                    X_cols=X,
+                    x_vals=list(x_val_tuple),
+                    mu_cols=mu_col_names,
+                    check_mu_cols=check_mu_col_names
+                )
+
+                # Store the results
+                for i in range(1, m + 1):
+                    pi_preds[(i, x_val_tuple)] = all_pi_weights_dict[f'pi_{i}']
+
+
+        # --- Stage 3: Compute Final Estimates from Full Prediction Vectors ---
         Yvec = obs_data[Y].values.flatten()
         for _, x_val_row in X_values_combinations.iterrows():
             x_val = tuple(x_val_row)
             
+            # Outcome Model (g-formula) estimate is always computed
             estimator_outcomes = {'OM': check_mu_preds[(1, x_val)]}
             
             if not only_OM:
+                # IPW estimator
                 pi_accumulated = np.ones(n_samples)
                 for i in range(1, m + 1):
-                    pi_accumulated *= pi_preds[(i, x_val)]
+                    # The weights are non-zero only for the subgroup that received the treatment
+                    # up to stage i. We multiply them sequentially.
+                    pi_accumulated = pi_preds[(i, x_val)]
+                
+                # The final weights pi^m are non-zero only for the subgroup with X=x.
+                # The product Y * pi^m correctly computes the weighted average for this subgroup.
                 estimator_outcomes['IPW'] = pi_accumulated * Yvec
 
+                # DML (AIPW) estimator
                 pseudo_outcome_dml = np.zeros(n_samples)
-                pi_acc_dict = {i: np.ones(n_samples) for i in range(1, m + 2)}
+                pi_acc_dict = {0: np.ones(n_samples)} # pi^0 = 1 for all
                 for i in range(1, m + 1):
-                    pi_acc_dict[i+1] = pi_acc_dict[i] * pi_preds[(i, x_val)]
+                    pi_acc_dict[i] = pi_preds[(i, x_val)]
 
-                for i in range(m, 0, -1):
+                # Summation term: sum_{i=1 to m} pi^{i-1}*(check_mu^i - mu^i)
+                # Note: The recursive formula simplifies this. The DML estimator for SBD is
+                # sum_{i=1 to m} [pi^i - pi^{i-1}]E[Y|...]_i + pi^m * Y
+                # A more direct implementation is the sequential DML pseudo-outcome:
+                pseudo_outcome_dml = check_mu_preds[(1, x_val)].copy() # Starts with OM
+                for i in range(1, m + 1):
+                    # pi^{i-1} is implicitly used in the calculation of pi^i
+                    # The DML update at stage i uses pi^i
                     pseudo_outcome_dml += pi_acc_dict[i] * (check_mu_preds[(i + 1, x_val)] - mu_preds[i])
-                pseudo_outcome_dml += check_mu_preds[(1, x_val)]
+
                 estimator_outcomes['DML'] = pseudo_outcome_dml
 
             for est in list_estimators:
                 final_outcome_vec = estimator_outcomes[est]
                 results[est]['ATE'][x_val] = np.mean(final_outcome_vec)
-                results[est]['VAR'][x_val] = np.var(final_outcome_vec)
+                results[est]['VAR'][x_val] = np.var(final_outcome_vec) / len(final_outcome_vec) # Use variance of the mean
 
     # 3. --- Calculate Confidence Intervals ---
     ATE, VAR = {k: v['ATE'] for k, v in results.items()}, {k: v['VAR'] for k, v in results.items()}
@@ -351,11 +346,18 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, 
 
     for est in list_estimators:
         for x_val, ate_val in ATE[est].items():
-            std_err = (VAR[est][x_val] / n_samples) ** 0.5
+            std_err = (VAR[est][x_val]) ** 0.5
             lower_CI[est][x_val] = ate_val - z_score * std_err
             upper_CI[est][x_val] = ate_val + z_score * std_err
 
     return ATE, VAR, lower_CI, upper_CI
+
+
+
+
+
+
+
 
 def estimate_mSBD_xval_yval(G, X, Y, xval, yval, obs_data, alpha_CI = 0.05, seednum = 123, only_OM = False, **kwargs): 
     """
@@ -585,8 +587,9 @@ if __name__ == "__main__":
     np.random.seed(seednum)
     random.seed(seednum)
  
-    d = 10
+    d = 5
     scm, X, Y = example_SCM.mSBD_SCM_JCI(seednum,d)
+    # scm, X, Y = example_SCM.BD_SCM(seednum,d)
     # scm, X, Y = example_SCM.luedtke_2017_sim1_scm(seednum)
     # scm, X, Y = example_SCM.Kang_Schafer(seednum)
     G = scm.graph
@@ -610,7 +613,8 @@ if __name__ == "__main__":
     truth = statmodules.ground_truth(scm, X, Y, y_val)
 
     start_time = time.process_time()
-    ATE, VAR, lower_CI, upper_CI = estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, cluster_map = cluster_map)
+    # ATE, VAR, lower_CI, upper_CI = estimate_BD(G, X, Y, obs_data, alpha_CI = 0.05, cluster_map = cluster_map)
+    ATE, VAR, lower_CI, upper_CI = estimate_SBD(G, X, Y, obs_data, alpha_CI = 0.05, cluster_map = cluster_map)
     end_time = time.process_time()
     print(f'Time with OSQP minimizer: {end_time - start_time}')
 

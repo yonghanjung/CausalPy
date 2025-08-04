@@ -56,67 +56,144 @@ def ground_truth(scm, X, Y, yval):
 			truth[tuple(x_val)] = intv_data_y.loc[mask, 'IyY'].mean()
 		return truth 
 
-def quadratic_balancing(obs, x_val, X, Z, col_feature_1='mu_xZ', col_feature_2='mu_XZ'):
-    # Get data and identify the target subgroup
-    # Note: This line assumes X is a list of columns, as in the original code.
-    IxX = np.array((obs[X] == x_val).prod(axis=1))
-    n = len(obs)
-    mu_xZ = obs[col_feature_1].values
-    mu_XZ = obs[col_feature_2].values
 
-    # Find the indices and count of the target subgroup to solve a smaller problem
-    idx_treated = np.where(IxX == 1)[0]
-    m = len(idx_treated)
+def _solve_single_step_weights(n, subgroup_indices, moment_features, target_moment_sum, epsilon=0.0):
+    """
+    Core OSQP solver for a single time step.
+    
+    Args:
+        ...
+        epsilon (float): Slack allowed for the balancing constraint. A value of 0.0
+                         enforces a strict equality.
+    """
+    m = len(subgroup_indices)
     if m == 0:
-        raise ValueError("No observations found for the specified `x_val`.")
-
-    # --- Setup the Quadratic Program for the m-sized treated group ---
+        return np.array([])
 
     # Objective function: minimize (1/2) * w'w
     P = sparse.diags([1.0] * m, format='csc')
     q = np.zeros(m)
 
     # --- Constraints ---
-
     # Constraint 1: sum(w_i) = n
     A1 = sparse.csr_matrix(np.ones((1, m)))
-    l1 = np.array([n])
-    u1 = np.array([n])
+    l1 = np.array([n - (epsilon/target_moment_sum) * n])
+    u1 = np.array([n + (epsilon/target_moment_sum) * n])
 
-    # Constraint 2: sum(w_i * moment_i) = sum(target_moment)
-    Cval1 = mu_XZ[idx_treated]
-    Cval2_sum = np.sum(mu_xZ)
-    A2 = sparse.csr_matrix(Cval1.reshape(1, -1))
-    l2 = np.array([Cval2_sum])
-    u2 = np.array([Cval2_sum])
-    
-    # Constraint 3: Non-negativity (w_i >= 1e-5)
-    # This is the key logical fix, applied correctly.
+    # Constraint 2: sum(w_i * moment_feature_i) = target_moment_sum +/- epsilon
+    A2 = sparse.csr_matrix(moment_features.reshape(1, -1))
+    # [MODIFIED] Apply the epsilon buffer to the lower and upper bounds.
+    l2 = np.array([target_moment_sum - epsilon])
+    u2 = np.array([target_moment_sum + epsilon])
+
+    # Constraint 3: Non-negativity (w_i >= 0)
     A3 = sparse.eye(m, format='csc')
-    l3 = np.full(m, 1e-5)
+    l3 = np.full(m, 1e-6) 
     u3 = np.full(m, np.inf)
-    
+
     # Combine constraints
     A = sparse.vstack([A1, A2, A3], format='csc')
     l = np.hstack([l1, l2, l3])
     u = np.hstack([u1, u2, u3])
-    
-    # OSQP solver setup
-    prob = osqp.OSQP()
-    prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False)
 
-    # Solve the problem
+    # Setup and solve the QP problem
+    prob = osqp.OSQP()
+    prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False, polish=True)
     res = prob.solve()
 
-    # Check the status of the solution
     if res.info.status != 'solved':
-        raise RuntimeError(f"OSQP failed to find a solution. Status: {res.info.status}")
-    
-    # Place the optimized weights for the subgroup into a full-length vector
-    w_opt_full = np.zeros(n)
-    w_opt_full[idx_treated] = res.x
+        raise RuntimeError(f"OSQP failed to solve the QP. Status: {res.info.status}")
 
-    return w_opt_full
+    return res.x
+
+
+def sequential_quadratic_balancing(obs, X_cols, x_vals, mu_cols, check_mu_cols, verbose=False):
+    """
+    Calculates sequential weights with a robust retry mechanism and a verbose switch.
+    """
+    n = len(obs)
+    num_steps = len(X_cols)
+
+    if not all(len(lst) == num_steps for lst in [x_vals, mu_cols, check_mu_cols]):
+        raise ValueError("Length of X_cols, x_vals, mu_cols, and check_mu_cols must be the same.")
+
+    pi_previous = np.ones(n)
+    all_weights = {}
+
+    for i in range(num_steps):
+        step = i + 1
+        X_col, x_val = X_cols[i], x_vals[i]
+        mu_col, check_mu_col = mu_cols[i], check_mu_cols[i]
+
+        subgroup_mask = (obs[X_col] == x_val)
+        subgroup_indices = np.where(subgroup_mask)[0]
+        m = len(subgroup_indices)
+        
+        w_subgroup = np.array([])
+
+        if m > 0:
+            moment_features = obs.loc[subgroup_mask, mu_col].values
+            check_mu_values = obs[check_mu_col].values
+            target_moment_sum = np.sum(pi_previous * check_mu_values)
+            
+            # Robust Retry Logic
+            try:
+                # First attempt: strict equality constraint
+                if verbose:
+                    print(f"\n--- Step {step} for x_vals={x_vals}: Attempting strict solve (epsilon=0)...")
+                w_subgroup = _solve_single_step_weights(
+                    n, subgroup_indices, moment_features, target_moment_sum, epsilon=0.0
+                )
+                if verbose:
+                    print("...Success: Strict solution found.")
+            except RuntimeError as e:
+                # Check if the error is the one we want to handle
+                if "infeasible" in str(e).lower():
+                    if verbose:
+                        print(f"!!! Warning: Strict solve failed. Status: {e}")
+
+                    # Retry with relaxed constraint
+                    relaxation_factor = 0.05  # Allow 5% slack
+                    base_epsilon = 1e-4 # Handles cases where target is near zero
+                    epsilon = (relaxation_factor * np.abs(target_moment_sum)) + base_epsilon
+                    
+                    if verbose:
+                        print(f"!!! Retrying with relaxed constraint (epsilon={epsilon:.4f})...")
+                    
+                    try:
+                        w_subgroup = _solve_single_step_weights(
+                            n, subgroup_indices, moment_features, target_moment_sum, epsilon=epsilon
+                        )
+                        if verbose:
+                            print("...Success: Relaxed solution found.")
+                    except RuntimeError as e2:
+                        # If it fails even with relaxation, use the final fallback.
+                        if verbose:
+                            print(f"!!! CRITICAL: Relaxed solve also failed. Status: {e2}")
+                            print("!!! Applying final fallback: Assigning equal weights.")
+                        equal_weight = n / m
+                        w_subgroup = np.full(m, equal_weight)
+                else:
+                    # It was a different runtime error, so we re-raise it.
+                    raise e
+        else:
+            if verbose:
+                print(f"\n--- Step {step} for x_vals={x_vals}: Subgroup is empty. Skipping.")
+
+        # Place the solved (or fallback) weights into a full-length vector
+        pi_current = np.zeros(n)
+        if m > 0:
+            pi_current[subgroup_indices] = w_subgroup
+        
+        all_weights[f'pi_{step}'] = pi_current
+        pi_previous = pi_current
+        
+        # Verification prints
+        if verbose:
+            print(f"Sum of pi^{step}: {np.sum(pi_current):.4f} (should be approx. {n})")
+
+    return all_weights
+
 
 # Function to compute the confidence interval
 def mean_confidence_interval(data, confidence=0.95):
