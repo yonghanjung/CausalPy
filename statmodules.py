@@ -29,13 +29,13 @@ def ground_truth(scm, X, Y, yval):
 	# Update SCM equations with randomized equations for each Xi in X
 
 	G = scm.graph
-	topo_V = graph.find_topological_order(G)
+	intervened_scm = copy.deepcopy(scm)
 
 	truth = {}
 	for Xi in X:
-		scm.equations[Xi] = randomized_equation
+		intervened_scm.equations[Xi] = randomized_equation
 
-	df_SCM = scm.generate_samples(1000000)
+	df_SCM = intervened_scm.generate_samples(1_000_000)
 	observables = [node for node in df_SCM.columns if not node.startswith('U')]
 
 	intv_data = df_SCM[observables]
@@ -48,13 +48,15 @@ def ground_truth(scm, X, Y, yval):
 		return truth 
 
 	else:
-		IyY = ((intv_data[Y] == tuple(yval))*1).prod(axis=1)
-		intv_data_y = intv_data[:]
-		intv_data_y.loc[:, 'IyY'] = np.asarray(IyY)
+		# Name-aligned multi-Y indicator
+		dict_y = dict(zip(Y, yval))
+		IyY = intv_data[Y].eq(pd.Series(dict_y)).all(axis=1).astype(int)
+		# Compute path probability by X cell
 		for _, x_val in X_values_combinations.iterrows():
-			mask = (intv_data_y[X] == x_val.values).all(axis=1)
-			truth[tuple(x_val)] = intv_data_y.loc[mask, 'IyY'].mean()
-		return truth 
+			mask = (intv_data[X] == x_val.values).all(axis=1)
+			# Note: cast to float to avoid numpy types leaking out
+			truth[tuple(x_val)] = float(IyY[mask].mean())
+		return truth
 
 
 def _solve_single_step_weights(n, subgroup_indices, moment_features, target_moment_sum, epsilon=0.0):
