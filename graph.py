@@ -296,6 +296,7 @@ def find_parents(G, C):
 			parents.update(G.predecessors(node))
 	# Filter out latent variables and add component if not empty
 	parents = {node for node in parents if not node.startswith('U') and node not in C}
+
 	return list(parents)
 
 def find_children(G, C):
@@ -729,46 +730,6 @@ def build_cluster_map(conceptual_nodes, obs_data):
             
     return cluster_map
 
-# def unfold_graph_from_data(G, clustered_list, obs_data):
-# 	"""
-# 	Combines building the clustered dictionary from the observation data
-# 	and unfolding the graph G accordingly.
-
-# 	Parameters:
-# 	  G: A networkx graph.
-# 	  clustered_list: List of base variable names (e.g., ['C', 'Z']).
-# 	  obs_data: A pandas DataFrame with the actual component column names.
-
-# 	Returns:
-# 	  G_new: The unfolded graph.
-# 	"""
-# 	# Build the clustered dictionary
-# 	clustered = {}
-# 	for var in clustered_list:
-# 		components = [col for col in obs_data.columns if col.startswith(var)]
-# 		try:
-# 			components.sort(key=lambda x: int(x[len(var):]))
-# 		except ValueError:
-# 			components.sort()
-# 		clustered[var] = components
-	
-# 	# Unfold the graph using the constructed dictionary
-# 	G_new = nx.DiGraph() if G.is_directed() else nx.Graph()
-# 	for node in G.nodes():
-# 		if node in clustered:
-# 			for comp in clustered[node]:
-# 				G_new.add_node(comp)
-# 		else:
-# 			G_new.add_node(node)
-	
-# 	for u, v in G.edges():
-# 		u_nodes = clustered.get(u, [u])
-# 		v_nodes = clustered.get(v, [v])
-# 		for u_comp in u_nodes:
-# 			for v_comp in v_nodes:
-# 				G_new.add_edge(u_comp, v_comp)
-	
-# 	return G_new
 
 def graph_to_graphdict(G: nx.DiGraph) -> dict:
     """

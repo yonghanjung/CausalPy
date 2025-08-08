@@ -1,131 +1,175 @@
-import pandas as pd
 import numpy as np
-import time
-import signal
-import sys
-from collections import defaultdict
-from itertools import product
-from sklearn.linear_model import LogisticRegression
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# --- Timeout Handling ---
-class TimeoutException(Exception): pass
-def timeout_handler(signum, frame): raise TimeoutException
+# --- Helper function for Bernoulli KL-divergence & its inversion ---
 
-# --- Data Generation and Method Implementations (Unchanged) ---
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
+def kl_bernoulli(p, q):
+    """Kullback-Leibler divergence for two Bernoulli distributions."""
+    p = np.clip(p, 1e-10, 1 - 1e-10)
+    q = np.clip(q, 1e-10, 1 - 1e-10)
+    return p * np.log(p / q) + (1 - p) * np.log((1 - p) / (1 - q))
 
-def generate_data_with_known_truth(n, d, betas, gammas):
-    z_cols = [f'Z{i+1}' for i in range(d)]
-    df = pd.DataFrame(np.random.randint(0, 2, size=(n, d)), columns=z_cols)
-    z_matrix = df[z_cols].values
-    linear_term_x = gammas['intercept'] + z_matrix @ gammas['z']
-    df['X'] = np.random.binomial(1, sigmoid(linear_term_x))
-    linear_term_y = betas['intercept'] + betas['x'] * df['X'] + z_matrix @ betas['z']
-    df['Y'] = np.random.binomial(1, sigmoid(linear_term_y))
-    return df
+def solve_kl_ucb(p_hat, target_kl, search_range, n_iters=16):
+    """Finds q by inverting the KL-divergence using binary search."""
+    q_low, q_high = search_range
+    for _ in range(n_iters):
+        q_mid = (q_low + q_high) / 2.0
+        kl = kl_bernoulli(p_hat, q_mid)
+        # Search direction depends on whether we are finding upper or lower bound
+        if search_range[0] < search_range[1]: # Searching for Upper Bound (q > p_hat)
+            if kl < target_kl:
+                q_low = q_mid
+            else:
+                q_high = q_mid
+        else: # Searching for Lower Bound (q < p_hat)
+            if kl < target_kl:
+                q_high = q_mid
+            else:
+                q_low = q_mid
+    return (q_low + q_high) / 2.0
 
-# Note: calculate_true_value is no longer used but kept for reference
-def calculate_true_value(d, x_val, betas):
-    true_value = 0.0
-    p_z = 0.5 ** d
-    for z in product([0, 1], repeat=d):
-        e_y_xz = sigmoid(betas['intercept'] + betas['x'] * x_val + np.array(z) @ betas['z'])
-        true_value += e_y_xz * p_z
-    return true_value
 
-def naive_summation(df, x_val, z_cols):
-    n, d = len(df), len(z_cols)
-    if n == 0: return 0.0
-    p_z_counts, e_yxz_sums, e_yxz_counts = defaultdict(int), defaultdict(int), defaultdict(int)
-    for r in df.itertuples(index=False):
-        z = tuple(getattr(r, col) for col in z_cols)
-        p_z_counts[z] += 1
-        key = (r.X, z); e_yxz_sums[key] += r.Y; e_yxz_counts[key] += 1
-    total = 0.0
-    for z in product([0, 1], repeat=d):
-        p_z = p_z_counts.get(z, 0) / n
-        if p_z == 0: continue
-        key = (x_val, z); e_y_xz = e_yxz_sums.get(key, 0) / e_yxz_counts.get(key, 1)
-        total += e_y_xz * p_z
-    return total
+# --- Algorithm Implementations ---
 
-def empirical_summation(df, x_val, z_cols):
-    n = len(df)
-    if n == 0: return 0.0
-    p_z_counts, e_yxz_sums, e_yxz_counts = defaultdict(int), defaultdict(int), defaultdict(int)
-    for r in df.itertuples(index=False):
-        z = tuple(getattr(r, col) for col in z_cols)
-        p_z_counts[z] += 1
-        key = (r.X, z); e_yxz_sums[key] += r.Y; e_yxz_counts[key] += 1
-    total = 0.0
-    for z, count in p_z_counts.items():
-        p_z = count / n
-        key = (x_val, z); e_y_xz = e_yxz_sums.get(key, 0) / e_yxz_counts.get(key, 1)
-        total += e_y_xz * p_z
-    return total
+class KL_UCB:
+    """Standard KL-UCB Algorithm (Baseline)."""
+    def __init__(self, n_arms):
+        self.n_arms = n_arms
+        self.pull_counts = np.zeros(n_arms)
+        self.reward_sums = np.zeros(n_arms)
+        self.t = 0
 
-def modeling_summation(df, x_val, z_cols):
-    if len(df) == 0: return 0.0
-    features = ['X'] + z_cols
-    model = LogisticRegression(solver='liblinear', C=10)
-    model.fit(df[features], df['Y'])
-    df_pred = df.copy(); df_pred['X'] = x_val
-    return np.mean(model.predict_proba(df_pred[features])[:, 1])
+    def select_arm(self):
+        self.t += 1
+        if self.t <= self.n_arms:
+            return self.t - 1
 
-def time_method_with_timeout(func, timeout_seconds, *args, **kwargs):
-    if sys.platform == "win32":
-        start = time.perf_counter(); val = func(*args, **kwargs); end = time.perf_counter()
-        return val, end - start
-    signal.signal(signal.SIGALRM, timeout_handler); signal.alarm(timeout_seconds)
-    start = time.perf_counter()
-    try:
-        val = func(*args, **kwargs); elapsed = time.perf_counter() - start
-        return val, elapsed
-    except TimeoutException: return "Timed Out", f"> {timeout_seconds}"
-    finally: signal.alarm(0)
+        rhs = np.log(self.t) + 3 * np.log(np.log(self.t))
+        ucb_indices = np.zeros(self.n_arms)
+        for arm in range(self.n_arms):
+            p_hat = self.reward_sums[arm] / self.pull_counts[arm]
+            target_kl = rhs / self.pull_counts[arm]
+            ucb_indices[arm] = solve_kl_ucb(p_hat, target_kl, (p_hat, 1.0))
+        return np.argmax(ucb_indices)
 
-def run_comparison(d, n_samples, timeout):
-    print(f"\n--- Running Comparison for d={d}, n={n_samples} (Timeout={timeout}s) ---")
+    def update(self, arm, reward):
+        self.pull_counts[arm] += 1
+        self.reward_sums[arm] += reward
+
+class Intersect_UCB:
+    """
+    The CORRECTED implementation of the 'shrinking by intersection' algorithm.
+    """
+    def __init__(self, n_arms, D_matrix):
+        self.n_arms = n_arms
+        self.D_matrix = D_matrix
+        self.pull_counts = np.zeros(n_arms)
+        self.reward_sums = np.zeros(n_arms)
+        self.reward_sq_sums = np.zeros(n_arms)
+        self.L_ett = np.zeros(n_arms)
+        self.U_ett = np.ones(n_arms)
+        self.t = 0
+
+    def select_arm(self):
+        self.t += 1
+        if self.t <= self.n_arms:
+            return self.t - 1
+
+        final_upper_bounds = np.zeros(self.n_arms)
+        rhs = np.log(self.t) + 3 * np.log(np.log(self.t))
+
+        for arm in range(self.n_arms):
+            p_hat = self.reward_sums[arm] / self.pull_counts[arm]
+            target_kl = rhs / self.pull_counts[arm]
+            U_emp = solve_kl_ucb(p_hat, target_kl, (p_hat, 1.0))
+            U_ett_arm = self.U_ett[arm]
+            final_upper_bounds[arm] = min(U_emp, U_ett_arm)
+
+        return np.argmax(final_upper_bounds)
+
+    def update(self, pulled_arm, reward):
+        # Update empirical stats for the pulled arm
+        self.pull_counts[pulled_arm] += 1
+        self.reward_sums[pulled_arm] += reward
+        self.reward_sq_sums[pulled_arm] += reward**2
+
+        # ==================== THE FIX ====================
+        # Calculate the FULL confidence interval for the pulled arm to propagate its uncertainty.
+        rhs = np.log(self.t) + 3 * np.log(np.log(self.t))
+        if self.pull_counts[pulled_arm] > 0:
+            p_hat_pulled = self.reward_sums[pulled_arm] / self.pull_counts[pulled_arm]
+            target_kl_pulled = rhs / self.pull_counts[pulled_arm]
+            L_emp_pulled = solve_kl_ucb(p_hat_pulled, target_kl_pulled, (p_hat_pulled, 0.0))
+            U_emp_pulled = solve_kl_ucb(p_hat_pulled, target_kl_pulled, (p_hat_pulled, 1.0))
+        else: # Should not happen after initial phase
+            L_emp_pulled, U_emp_pulled = 0, 1
+
+        # Update ETT bounds for ALL OTHER arms based on the CI of the pulled arm
+        for x in range(self.n_arms):
+            if x == pulled_arm:
+                continue
+
+            # Estimate variance of arm x
+            if self.pull_counts[x] > 1:
+                mu_hat_x = self.reward_sums[x] / self.pull_counts[x]
+                var_hat_x = (self.reward_sq_sums[x] / self.pull_counts[x]) - mu_hat_x**2
+            else:
+                var_hat_x = 0.25 # Max variance for Bernoulli
+            var_hat_x = max(0, var_hat_x)
+
+            delta = np.sqrt(2 * var_hat_x * self.D_matrix[x, pulled_arm])
+
+            # New ETT interval is based on the PULLED ARM'S CI, not its point estimate.
+            new_L_ett = L_emp_pulled - delta
+            new_U_ett = U_emp_pulled + delta
+            
+            # Intersect this new constraint with the existing ETT bounds
+            self.L_ett[x] = max(self.L_ett[x], new_L_ett)
+            self.U_ett[x] = min(self.U_ett[x], new_U_ett)
+
+# --- Simulation and Plotting --- (Identical to previous script)
+def run_experiment(arm_means, D_matrix, horizon=3000, n_sims=200):
+    n_arms = len(arm_means)
+    mu_optimal = np.max(arm_means)
     
-    np.random.seed(42)
-    betas = {'intercept': -0.5, 'x': 0.8, 'z': np.random.uniform(-0.5, 0.5, d)}
-    gammas = {'intercept': 0.2, 'z': np.random.uniform(-0.3, 0.3, d)}
+    regrets = {'KL-UCB': np.zeros((n_sims, horizon)), 'Corrected Intersect-UCB': np.zeros((n_sims, horizon))}
+    pulls = {'KL-UCB': np.zeros((n_sims, n_arms)), 'Corrected Intersect-UCB': np.zeros((n_sims, n_arms))}
+    algos = {'KL-UCB': KL_UCB(n_arms), 'Corrected Intersect-UCB': Intersect_UCB(n_arms, D_matrix)}
 
-    df_sample = generate_data_with_known_truth(n_samples, d, betas, gammas)
-    z_cols = [f'Z{i+1}' for i in range(d)]
+    print("Running simulations with corrected code...")
+    for i in range(n_sims):
+        if (i + 1) % 20 == 0: print(f"  Simulation {i+1}/{n_sims}")
+        for name, algo_class in algos.items():
+            current_algo = algo_class.__class__(n_arms, D_matrix) if name != 'KL-UCB' else algo_class.__class__(n_arms)
+            sim_rewards = []
+            for t in range(horizon):
+                arm = current_algo.select_arm()
+                reward = np.random.binomial(1, arm_means[arm])
+                current_algo.update(arm, reward)
+                sim_rewards.append(reward)
+            pulls[name][i, :] = current_algo.pull_counts
+            regrets[name][i, :] = mu_optimal * np.arange(1, horizon + 1) - np.cumsum(sim_rewards)
+    print("Simulations complete.")
+    return regrets, pulls
 
-    # 1. Establish ground truth using the modeling method
-    # Run it without a timeout as it's our baseline.
-    ground_truth = modeling_summation(df_sample, 1, z_cols)
-    print(f"Ground Truth (from Modeling Method): {ground_truth:.4f}")
+# Main Execution
+ARM_MEANS = np.array([0.8, 0.75, 0.5])
+N_ARMS = len(ARM_MEANS)
+D_MATRIX = np.full((N_ARMS, N_ARMS), 0.5); D_MATRIX[0, 1] = 0.01; D_MATRIX[1, 0] = 0.01; np.fill_diagonal(D_MATRIX, 0)
+regrets, pulls = run_experiment(ARM_MEANS, D_MATRIX)
 
-    # 2. Test each method and compare to the new ground truth
-    # methods = {"Naive Summation": naive_summation, "Empirical Summation": empirical_summation}
-    methods = {"Empirical Summation": empirical_summation, "Modeling (g-comp)": modeling_summation}
-    results = {}
-    
-    # Store the modeling result first
-    results['Modeling (g-comp)'] = {'Value': ground_truth, 'Time (s)': "N/A (Baseline)", 'Abs Error': 0.0}
-
-    for name, func in methods.items():
-        val, exec_time = time_method_with_timeout(func, timeout, df=df_sample, x_val=1, z_cols=z_cols)
-        error = abs(val - ground_truth) if isinstance(val, (int, float)) else "N/A"
-        results[name] = {'Value': val, 'Time (s)': exec_time, 'Abs Error': error}
-    
-    # 3. Print results
-    print(f"{'Method':<25} | {'Estimated':<18} | {'Acc':<18} | {'Time (s)':<20}")
-    print("-" * 80)
-    # Ensure a consistent order
-    # order = ["Naive Summation", "Empirical Summation", "Modeling (g-comp)"]
-    order = ["Empirical Summation", "Modeling (g-comp)"]
-    for method in order:
-        res = results[method]
-        val_str = f"{res['Value']:.4f}" if isinstance(res['Value'], float) else str(res['Value'])
-        err_str = f"{res['Abs Error']:.4f}" if isinstance(res['Abs Error'], float) else "N/A"
-        time_str = f"{res['Time (s)']:.4f}" if isinstance(res['Time (s)'], float) else str(res['Time (s)'])
-        print(f"{method:<25} | {val_str:<18} | {err_str:<18} | {time_str:<20}")
-
-# --- Scenarios ---
-# Using a large d to highlight the differences
-run_comparison(d=10, n_samples=5000, timeout=3)
+# Plotting
+sns.set_theme(style="whitegrid")
+plt.figure(figsize=(14, 6))
+plt.subplot(1, 2, 1)
+plt.plot(np.mean(regrets['KL-UCB'], axis=0), label="KL-UCB")
+plt.plot(np.mean(regrets['Corrected Intersect-UCB'], axis=0), label="Corrected Intersect-UCB")
+plt.title("Cumulative Regret (Corrected Algorithm)")
+plt.xlabel("Time Steps (T)"); plt.ylabel("Average Cumulative Regret"); plt.legend(); plt.grid(True)
+plt.subplot(1, 2, 2)
+bar_width = 0.35; index = np.arange(N_ARMS)
+plt.bar(index - bar_width/2, np.mean(pulls['KL-UCB'], axis=0), bar_width, label="KL-UCB")
+plt.bar(index + bar_width/2, np.mean(pulls['Corrected Intersect-UCB'], axis=0), bar_width, label="Corrected Intersect-UCB")
+plt.title("Average Arm Pulls"); plt.xlabel("Arm Index"); plt.ylabel("Total Pulls")
+plt.xticks(index, [f"Arm {i}\n($\mu$={m})" for i,m in enumerate(ARM_MEANS)]); plt.legend(); plt.tight_layout(); plt.show()
