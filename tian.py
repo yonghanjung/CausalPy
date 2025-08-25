@@ -207,6 +207,118 @@ def Tian_estimand(G, X, Y, latex, topo_V = None):
 			estimand = f"{Q_V_SX}{Q_SX}"
 	return estimand 
 
+# --- dc-partition (Def. 9) and generalized Tian check (Def. 10) ---
+
+def _as_list(obj):
+    """Utility: normalize scalars/iterables to a list of strings."""
+    if obj is None:
+        return []
+    if isinstance(obj, (list, tuple, set)):
+        return list(obj)
+    return [obj]
+
+def _c_partition_of_X(G, X):
+    """
+    Partition X by c-components in G.
+    Returns a list of sets [Xc1, Xc2, ...], each wholly contained in a single c-component.
+    """
+    X = _as_list(X)
+    buckets = {}  # key: frozenset(c-comp nodes), value: set of X in that c-comp
+    for xi in X:
+        cc_nodes = set(graph.find_c_components(G, [xi]))  # union of the c-component containing xi
+        key = frozenset(cc_nodes)
+        if key not in buckets:
+            buckets[key] = set()
+        buckets[key].add(xi)
+    # Return just the X-contents for each c-component; ignore empty
+    return [sorted(list(s)) for s in buckets.values() if len(s) > 0], [set(k) for k in buckets.keys()]
+
+def dc_partition(G, X, Y):
+    r"""
+    Definition 9 (Descendant-closed c-partition). For each c-part X_c ⊆ X,
+    let
+        X'_c = De_{G(c(X_c))}(X_c) \ PCP(X, Y) \ Y,
+    where c(X_c) is the c-component containing X_c, G(c(X_c)) is the induced subgraph on that component,
+    De_{G(c(X_c))}(X_c) are directed descendants *within that subgraph*,
+    and PCP(X,Y) is the proper causal path set. (Defs. and notation per the draft.)  # :contentReference[oaicite:1]{index=1}
+
+    Returns:
+        dc_blocks: list of lists, each is X'_c (sorted)
+        meta: list of dicts with extra info per block (c-comp nodes, etc.)
+    """
+    X = _as_list(X)
+    Y = set(_as_list(Y))
+
+    # c-partition (groups of X by c-component)
+    Xc_list, ccomp_nodes_list = _c_partition_of_X(G, X)
+
+    pcp = set(adjustment.proper_causal_path(G, X, list(Y)))  # PCP(X,Y)
+
+    dc_blocks = []
+    meta = []
+
+    for Xc, ccomp_nodes in zip(Xc_list, ccomp_nodes_list):
+        # G(c(Xc)): subgraph induced by c-component nodes (graph.subgraphs keeps relevant U's too)
+        Gc = graph.subgraphs(G, list(ccomp_nodes))
+
+        # De_{G(c(Xc))}(Xc) (observable descendants within the subgraph; the helper includes the nodes themselves)
+        De_in_c = set(graph.find_descendant(Gc, Xc))
+
+        # X'_c = De_{G(c(Xc))}(Xc) \ PCP(X,Y) \ Y
+        Xc_prime = list(sorted(list(De_in_c - pcp - Y)))
+
+        dc_blocks.append(Xc_prime)
+        meta.append({
+            "Xc": list(sorted(Xc)),
+            "c_component": list(sorted(ccomp_nodes)),
+            "De_in_c": list(sorted(De_in_c)),
+            "PCP": list(sorted(pcp)),
+            "Y": list(sorted(Y)),
+            "Xc_prime": list(sorted(Xc_prime)),
+        })
+
+    return dc_blocks, meta
+
+def check_dcGenTian(G, X, Y, return_witness=False):
+    r"""
+    Definition 10 (Generalized Tian’s Criterion via dc-partition).
+    Let {X'_1, ..., X'_c} = dc_partition(G, X, Y).
+    X satisfies the generalized Tian criterion iff, for every nonempty X'_i,
+        X'_i = De_{G(c(X'_i))}(X'_i).
+    (All notation as in the draft.)  # :contentReference[oaicite:2]{index=2}
+
+    Args:
+        G: nx.DiGraph
+        X: list[str] | str
+        Y: list[str] | str
+        return_witness: if True, return (bool, details) with a failing witness
+
+    Returns:
+        bool  |  (bool, dict) if return_witness
+    """
+    dc_blocks, meta = dc_partition(G, X, Y)
+
+    for block, info in zip(dc_blocks, meta):
+        Xp = set(block)
+        if len(Xp) == 0:
+            continue  # vacuously satisfied for this block
+        # c(X'_i): c-component containing X'_i (they should all be within a single c-comp)
+        c_nodes = set(graph.find_c_components(G, list(Xp)))
+        Gc = graph.subgraphs(G, list(c_nodes))
+        De_in_c = set(graph.find_descendant(Gc, list(Xp)))  # includes Xp itself
+
+        if De_in_c != Xp:
+            if return_witness:
+                witness = {
+                    "X_prime": sorted(list(Xp)),
+                    "c_component_of_X_prime": sorted(list(c_nodes)),
+                    "De_in_c_of_X_prime": sorted(list(De_in_c)),
+                    "meta": info,
+                }
+                return False, witness
+            return False
+
+    return (True, {"dc_blocks": dc_blocks, "meta": meta}) if return_witness else True
 
 
 

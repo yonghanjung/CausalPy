@@ -941,37 +941,21 @@ def any_graph3():
 	Y = ['Y1','Y2']
 	return [graph_dict, node_positions, X, Y]
 
-def any_graph4():
-	graph_dict = {
-		"U_X2_Y": ["X2", "Y"],
-		"U_V1_X2": ["V1", "X2"], 
-		"X2": ['V1',"V2"],
-		"V1": ["X1"],
-		"X1": ['V2'],
-		"V2": ["Y"], 
-		"Y": []
+def AISTAT_working_graph():
+	graph_dict = {'U_X1_X2': ['X1', 'X2'], 
+				  'U_X1_Y': ['X1','Y'],
+				  'C': ['X2', 'X1', 'Z', 'Y'],
+				  'X2': ['X1', 'Y'], 
+				  'X1': ['Z'], 
+				  'Z': ['Y'], 
+				  'Y': []
 	}
 	node_positions = None
-	X = ['X1','X2']
+	X = ['X1', 'X2']
 	Y = ['Y']
 	return [graph_dict, node_positions, X, Y]
-
-def BD_NOT_Tian():
-	graph_dict = graph_dict = {
-		"U_X1_X2": ["X1", "X2"],
-		"U_X1_V1": ["V1", "X1"], 
-  		"U_X2_V1": ["V1", "X2"], 
-		"C": ['X1','X2','Y'],
-		"X1": ["V1",'Y'],
-		"V1": ['X2'],
-		"X2": ["Y"], 
-		"Y": []
-	}
-	node_positions = None
-	X = ['X1','X2']
-	Y = ['Y']
-	return [graph_dict, node_positions, X, Y]
-
+	
+				  
 
 
 

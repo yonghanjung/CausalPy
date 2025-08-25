@@ -50,7 +50,6 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 	condition_FD = kwargs.get('condition_FD', None)
 	condition_Tian = kwargs.get('condition_Tian', None)
 	condition_gTian = kwargs.get('condition_gTian', None)
-	condition_dcTian = kwargs.get('condition_dcTian', None)
 	condition_product = kwargs.get('condition_product', None)
 
 	# --- Outer Retry Loop: Resets the main seed on failure ---
@@ -130,14 +129,12 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 				satisfied_FD = frontdoor.check_FD(G0, X0, Y0)
 				satisfied_Tian = tian.check_Tian_criterion(G0, X0)
 				satisfied_gTian = tian.check_Generalized_Tian_criterion(G0, X0)
-				condition_dcTian = tian.check_dcGenTian(G0, X0,Y0)
 				satisfied_product = tian.check_product_criterion(G0, X0, Y0)
 
 				condition_checks = {
 					"condition_BD": satisfied_adjustment, "condition_mSBD": satisfied_mSBD,
 					"condition_FD": satisfied_FD, "condition_Tian": satisfied_Tian,
-					"condition_gTian": satisfied_gTian, "condition_dcTian": condition_dcTian, 
-     				"condition_product": satisfied_product
+					"condition_gTian": satisfied_gTian, "condition_product": satisfied_product
 				}
 
 				all_conditions_met = True
@@ -332,7 +329,7 @@ if __name__ == "__main__":
     # )
  
 	result = find_graph_by_search(
-		min_observables=4,      # Min total observables (V+X+Y)
+		min_observables=3,      # Min total observables (V+X+Y)
 		max_observables=6,      # Max total observables (V+X+Y)
 		min_unobservables=1,		# Min total unobservables 
 		max_unobservables=4,    # Max unobservables
@@ -340,12 +337,11 @@ if __name__ == "__main__":
 		num_outcomes=1,         # Fixed number of outcomes
 		condition_ID=True,
 		# condition_BD=True,
-		# condition_mSBD=False,
-		condition_FD=True,
+		condition_mSBD=False,
+		condition_FD=False,
 		# condition_Tian=False,
-		# condition_gTian=False,
-		condition_dcTian = False,
-		# condition_product=False,
+		condition_gTian=False,
+		condition_product=True,
 		seednum=seednum
 	)
  
@@ -392,7 +388,7 @@ if __name__ == "__main__":
 		
 		# Identify the causal effect P(Y | do(X)) from G 
 		# G, X, Y = identify.preprocess_GXY_for_ID(G, X, Y)
-		print( identify.causal_identification(G,X,Y, latex = False, copyTF=True) )
+		print( identify.causal_identification(G,X,Y, latex = True, copyTF=True) )
 
 
 		# Draw the C-tree and AC-tree 
