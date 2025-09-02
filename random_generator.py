@@ -51,6 +51,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 	condition_Tian = kwargs.get('condition_Tian', None)
 	condition_gTian = kwargs.get('condition_gTian', None)
 	condition_dcTian = kwargs.get('condition_dcTian', None)
+	condition_multilinear = kwargs.get('condition_multilinear', None)
 	condition_product = kwargs.get('condition_product', None)
 
 	# --- Outer Retry Loop: Resets the main seed on failure ---
@@ -131,13 +132,14 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 				satisfied_Tian = tian.check_Tian_criterion(G0, X0)
 				satisfied_gTian = tian.check_Generalized_Tian_criterion(G0, X0)
 				condition_dcTian = tian.check_dcGenTian(G0, X0,Y0)
+				condition_multilinear = tian.check_multilinear(G0, X0,Y0,return_witness=False)
 				satisfied_product = tian.check_product_criterion(G0, X0, Y0)
 
 				condition_checks = {
 					"condition_BD": satisfied_adjustment, "condition_mSBD": satisfied_mSBD,
 					"condition_FD": satisfied_FD, "condition_Tian": satisfied_Tian,
 					"condition_gTian": satisfied_gTian, "condition_dcTian": condition_dcTian, 
-     				"condition_product": satisfied_product
+					"condition_multilinear": condition_multilinear, "condition_product": satisfied_product
 				}
 
 				all_conditions_met = True
@@ -332,20 +334,21 @@ if __name__ == "__main__":
     # )
  
 	result = find_graph_by_search(
-		min_observables=4,      # Min total observables (V+X+Y)
-		max_observables=6,      # Max total observables (V+X+Y)
-		min_unobservables=1,		# Min total unobservables 
-		max_unobservables=4,    # Max unobservables
-		num_treatments=2,       # Fixed number of treatments
+		min_observables=6,      # Min total observables (V+X+Y)
+		max_observables=8,      # Max total observables (V+X+Y)
+		min_unobservables=0,		# Min total unobservables 
+		max_unobservables=8,    # Max unobservables
+		num_treatments=3,       # Fixed number of treatments
 		num_outcomes=1,         # Fixed number of outcomes
 		condition_ID=True,
 		# condition_BD=True,
-		# condition_mSBD=False,
-		condition_FD=True,
-		# condition_Tian=False,
+		# condition_mSBD=True,
+		# condition_FD=True,
+		# condition_Tian=True,
 		# condition_gTian=False,
-		condition_dcTian = False,
-		# condition_product=False,
+		# condition_dcTian = True,
+		condition_multilinear = False,
+		# condition_product=True,
 		seednum=seednum
 	)
  
