@@ -412,8 +412,9 @@ def estimate_mSBD_y(G, X, Y, y_policy, obs_data, alpha_CI=0.05, cluster_map=None
     dict_Z = {f'Z{i}': list(set(dict_Z.get(f'Z{i}', []) + dict_Y.get(f'Y{i-1}', []))) for i in range(1, len(dict_Z) + 1)}
     
     
+    obs_data = obs_data.copy()
     IyY = obs_data[Y].eq(pd.Series(dict_y)).all(axis=1).astype(int)
-    Y_label = 'Y'
+    Y_label = '__indicator_outcome__'
     obs_data[Y_label] = IyY
 
     # Unfold the clustered variables
