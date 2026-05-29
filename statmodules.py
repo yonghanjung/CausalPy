@@ -255,7 +255,7 @@ def learn_pi(obs, col_feature, col_label, params=None):
 			'gamma': 0,
 			'max_depth': 20,
 			'min_child_weight': 1,
-			'subsample': 0.0,
+			'subsample': 1.0,
 			'colsample_bytree': 1,
 			'objective': 'binary:logistic',  # Change as per your objective
 			'eval_metric': 'logloss',  # Change as per your needs
@@ -277,7 +277,7 @@ def learn_multi_pi(obs, col_feature, col_label, params=None):
 			'gamma': 0,
 			'max_depth': 20,
 			'min_child_weight': 1,
-			'subsample': 0.0,
+			'subsample': 1.0,
 			'colsample_bytree': 1,
 			'objective': 'multi:softprob',  # Change as per your objective
 			'num_class': len(np.unique(obs[col_label])),
