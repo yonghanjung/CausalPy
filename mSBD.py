@@ -30,7 +30,7 @@ def partition_Y(G, X, Y):
 	for i, Xi in enumerate(X):
 		so_far_Y = list()
 		for j in range(i+1):
-			so_far_Y += partition[f'Y{i}']
+			so_far_Y += partition[f'Y{j}']
 		remaining_Y = list(set(Y) - set(so_far_Y))
 		descendants_of_Xi = graph.find_descendant(G, [Xi])
 		if i < len(X) - 1:
