@@ -79,8 +79,9 @@ def _solve_single_step_weights(n, subgroup_indices, moment_features, target_mome
     # --- Constraints ---
     # Constraint 1: sum(w_i) = n
     A1 = sparse.csr_matrix(np.ones((1, m)))
-    l1 = np.array([n - (epsilon/target_moment_sum) * n])
-    u1 = np.array([n + (epsilon/target_moment_sum) * n])
+    _ratio = (epsilon / target_moment_sum) if target_moment_sum != 0 else 0.0
+    l1 = np.array([n - _ratio * n])
+    u1 = np.array([n + _ratio * n])
 
     # Constraint 2: sum(w_i * moment_feature_i) = target_moment_sum +/- epsilon
     A2 = sparse.csr_matrix(moment_features.reshape(1, -1))
