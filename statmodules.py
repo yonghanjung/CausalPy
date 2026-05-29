@@ -306,7 +306,7 @@ def find_mu_param(obs):
 	# 	'eval_metric': 'rmse',
 	# 	'n_jobs': 4  # Assuming you have 4 cores
 	# }
-	xgb_model = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse', n_jobs=4, booser = 'gbtree', gamma = 0, min_child_weight=1, subsample = 0.8, alpha=0)
+	xgb_model = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse', n_jobs=4, booster = 'gbtree', gamma = 0, min_child_weight=1, subsample = 0.8, alpha=0)
 
 	# Define the parameter grid
 	param_grid = {
