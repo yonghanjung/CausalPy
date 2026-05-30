@@ -206,12 +206,6 @@ def mean_confidence_interval(data, confidence=0.95):
 	margin_of_error = sem * stats.t.ppf((1 + confidence) / 2., len(data) - 1)
 	return mean, margin_of_error
 
-# Extract error bars
-def extract_error_bars(data):
-	means = data
-	errors = ci_acc
-	return means, errors
-
 def add_noise(vec,add_noise_TF):
 	if add_noise_TF:
 		n = len(vec)
