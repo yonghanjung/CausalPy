@@ -21,7 +21,6 @@ import tian
 import statmodules
 
 import identify
-import est_BD
 import est_mSBD
 import example_SCM
 	
