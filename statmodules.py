@@ -344,8 +344,11 @@ def compute_performance(truth, ATE):
 	rank_correlation_pvalue = {}
 
 	for estimator in list(ATE.keys()):
-		performance[estimator] = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE[estimator].values()))))
-		rank_correlation_pvalue[estimator] = list( spearmanr(list(truth.values()), list(ATE[estimator].values())) )
+		keys = list(truth.keys())
+		truth_vals = np.array([truth[k] for k in keys])
+		ate_vals = np.array([ATE[estimator][k] for k in keys])
+		performance[estimator] = np.mean(np.abs(truth_vals - ate_vals))
+		rank_correlation_pvalue[estimator] = list( spearmanr(truth_vals, ate_vals) )
 	
 	performance_table_data = [[estimator] + [performance[estimator]] for estimator in performance]
 	performance_table_header = ["Estimator", "Error"]
