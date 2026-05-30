@@ -104,7 +104,7 @@ def _solve_single_step_weights(n, subgroup_indices, moment_features, target_mome
     prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False, polish=True)
     res = prob.solve()
 
-    if res.info.status != 'solved':
+    if res.info.status not in ('solved', 'solved inaccurate'):
         raise RuntimeError(f"OSQP failed to solve the QP. Status: {res.info.status}")
 
     return res.x
