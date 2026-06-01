@@ -1,4 +1,5 @@
 import pyperclip
+import math 
 import graph
 import identify
 import examples
@@ -20,8 +21,9 @@ if __name__ == "__main__":
 
 	num_sim = 10000
 
-	num_observables = random.randint(5, 15)  # A random integer between 1 and 10
-	num_unobservables = random.randint(0, num_observables)
+	num_observables = random.randint(4, 15)  # A random integer between 1 and 10
+	# num_unobservables = random.randint(0, num_observables)
+	num_unobservables = random.randint(num_observables, math.comb(num_observables,2))
 	num_treatments = random.randint(1, int(round(num_observables/2)))
 	# num_treatments = 2
 	num_outcomes = 1
