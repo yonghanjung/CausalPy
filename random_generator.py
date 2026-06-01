@@ -41,7 +41,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 	# --- Parameters for search control ---
 	max_graphs_to_test = kwargs.get('max_graphs', 1e7)
 	max_consecutive_duplicates = kwargs.get('max_consecutive_duplicates', 10000)
-	max_retries = kwargs.get('max_retries', 50)
+	max_retries = kwargs.get('max_retries', 10)
 
 	# --- Get user-defined conditions from kwargs ---
 	condition_ID = kwargs.get('condition_ID', None)
@@ -51,7 +51,8 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 	condition_Tian = kwargs.get('condition_Tian', None)
 	condition_gTian = kwargs.get('condition_gTian', None)
 	condition_dcTian = kwargs.get('condition_dcTian', None)
-	condition_multilinear = kwargs.get('condition_multilinear', None)
+	condition_MC = kwargs.get('condition_MC', None)
+	condition_WMC = kwargs.get('condition_WMC', None)
 	condition_product = kwargs.get('condition_product', None)
 
 	# --- Outer Retry Loop: Resets the main seed on failure ---
@@ -61,7 +62,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 		random.seed(current_seed)
 		np.random.seed(current_seed)
   
-		print(f"\n--- Starting Search Attempt {retry_attempt + 1}/{max_retries} (Seed: {current_seed}) ---")
+		# print(f"\n--- Starting Search Attempt {retry_attempt + 1}/{max_retries} (Seed: {current_seed}) ---")
 
 		# --- Initialize counters and storage ---
 		stored_adj_strings = set()
@@ -107,7 +108,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 			graphs_tested += 1
 	
 			# --- Provide better progress feedback ---
-			print(f"Unique graphs tested: {graphs_tested} | Consecutive duplicates: {consecutive_duplicates}   ", end='\r')
+			# print(f"Unique graphs tested: {graphs_tested} | Consecutive duplicates: {consecutive_duplicates}   ", end='\r')
 
 			# --- Filtering Logic (your original logic was correct here) ---
 			id_status = identify.ID_return_Ctree(G, X, Y)[0] # 0: unID, 1: ID, -1: trivialID 
@@ -131,15 +132,17 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 				satisfied_FD = frontdoor.check_FD(G0, X0, Y0)
 				satisfied_Tian = tian.check_Tian_criterion(G0, X0)
 				satisfied_gTian = tian.check_Generalized_Tian_criterion(G0, X0)
-				condition_dcTian = tian.check_dcGenTian(G0, X0,Y0)
-				condition_multilinear = tian.check_multilinear(G0, X0,Y0,return_witness=False)
+				satisfied_dcTian = tian.check_dcGenTian(G0, X0,Y0)
+				satisfied_WMC = tian.check_WMC(G0, X0,Y0,return_witness=False)
+				satisfied_MC = tian.check_MC(G0, X0,Y0,return_witness=False)
 				satisfied_product = tian.check_product_criterion(G0, X0, Y0)
 
 				condition_checks = {
 					"condition_BD": satisfied_adjustment, "condition_mSBD": satisfied_mSBD,
 					"condition_FD": satisfied_FD, "condition_Tian": satisfied_Tian,
-					"condition_gTian": satisfied_gTian, "condition_dcTian": condition_dcTian, 
-					"condition_multilinear": condition_multilinear, "condition_product": satisfied_product
+					"condition_gTian": satisfied_gTian, "condition_dcTian": satisfied_dcTian, 
+					"condition_WMC": satisfied_WMC, "condition_MC": satisfied_MC,
+					"condition_product": satisfied_product
 				}
 
 				all_conditions_met = True
@@ -175,7 +178,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 					# the loop to check the next one.
 				
 				if all_conditions_met:
-					print(f"\nFound graph with all conditions met after testing {graphs_tested} unique graphs.")
+					# print(f"\nFound graph with all conditions met after testing {graphs_tested} unique graphs.")
 					return [graph_dict, node_positions, X, Y]
 	
  # This part is reached only if all retry attempts have failed
@@ -334,11 +337,11 @@ if __name__ == "__main__":
     # )
  
 	result = find_graph_by_search(
-		min_observables=6,      # Min total observables (V+X+Y)
-		max_observables=8,      # Max total observables (V+X+Y)
-		min_unobservables=0,		# Min total unobservables 
-		max_unobservables=8,    # Max unobservables
-		num_treatments=3,       # Fixed number of treatments
+		min_observables=8,      # Min total observables (V+X+Y)
+		max_observables=15,      # Max total observables (V+X+Y)
+		min_unobservables=4,		# Min total unobservables 
+		max_unobservables=20,    # Max unobservables
+		num_treatments=5,       # Fixed number of treatments
 		num_outcomes=1,         # Fixed number of outcomes
 		condition_ID=True,
 		# condition_BD=True,
@@ -346,8 +349,9 @@ if __name__ == "__main__":
 		# condition_FD=True,
 		# condition_Tian=True,
 		# condition_gTian=False,
-		# condition_dcTian = True,
-		condition_multilinear = False,
+		condition_dcTian = True,
+		# condition_WMC = False,
+  		condition_MC = False,
 		# condition_product=True,
 		seednum=seednum
 	)

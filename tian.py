@@ -339,7 +339,7 @@ def check_dcGenTian(G, X, Y, return_witness=False):
 	return (True, {"dc_blocks": dc_blocks, "meta": meta}) if return_witness else True
 
 
-def check_multilinear_v1(G,X,Y,return_witness: bool = False):
+def check_WMC(G,X,Y,return_witness: bool = False):
 	"""
 	Implements:
 	  D := an_{G(V \\ X)}(Y)
@@ -366,6 +366,8 @@ def check_multilinear_v1(G,X,Y,return_witness: bool = False):
 	D = list(set(graph.find_ancestor(subgraph_V_minus_X,Y)) | set(Y))
 	S_X = graph.find_c_components(G, X)
 	DX = sorted(set(S_X).intersection(set(D)))
+	if len(DX) == 0:
+		return True 
  
 	subgraph_DX = graph.subgraphs(G,DX)
 	c_components_DX = graph.list_all_c_components(subgraph_DX)
@@ -385,7 +387,7 @@ def check_multilinear_v1(G,X,Y,return_witness: bool = False):
 	else:
 		return SAC_ok
 
-def check_multilinear(G,X,Y,return_witness: bool = False):
+def check_MC(G,X,Y,return_witness: bool = False):
 	"""
 	Implements:
 	  D := an_{G(V \\ X)}(Y)

@@ -972,23 +972,52 @@ def BD_NOT_Tian():
 	Y = ['Y']
 	return [graph_dict, node_positions, X, Y]
 
-# def any_graph6():
-# 	graph_dict = graph_dict = {
-# 		"U_X1_X2": ["X1", "X2"],
-# 		"U_X1_V1": ["V1", "X1"], 
-#   		"U_X2_V1": ["V1", "X2"], 
-# 		"C": ['X1','X2','Y'],
-# 		"X1": ["V1",'Y'],
-# 		"V1": ['X2'],
-# 		"X2": ["Y"], 
-# 		"Y": []
-# 	}
-# 	node_positions = None
-# 	X = ['X1','X2']
-# 	Y = ['Y']
-# 	return [graph_dict, node_positions, X, Y]
+def FD_not_Tian():
+	graph_dict = graph_dict = {
+		"U_X1_X2": ["X1", "X2"],
+		"U_X1_R": ["X1", "R"], 
+  		"U_X1_Y": ["X1", "Y"],
+		"U_R_X2": ["X2","R"],
+		"U_X2_Y": ["X2","Y"],
+		"X1": ['R','Z'],
+		"R": ['X2'],
+		"X2": ["Z"],
+		"Z": ['Y'],
+		"Y": []
+	}
+	node_positions = None
+	X = ['X1','X2']
+	Y = ['Y']
+	return [graph_dict, node_positions, X, Y]
 
+def WMC_not_MC():
+	graph_dict = graph_dict = {
+  		"U_X1_Y": ["X1", "Y"],
+		"U_R_X2": ["X2","R"],
+		"X1": ['R','X2'],
+		"R": ['X2',"Y"],
+		"X2": ["Y"],
+		"Y": []
+	}
+	node_positions = None
+	X = ['X1','X2']
+	Y = ['Y']
+	return [graph_dict, node_positions, X, Y]
 
-
+def MC_not_MTian_not_WMC():
+	graph_dict = graph_dict = {
+  		"U_X1_X2": ["X1", "X2"],
+    	"U_X1_Y": ["X1", "Y"],
+		"U_R_X2": ["X2","R"],
+		"X1": ['R','X2','Z'],
+		"X2": ['Z'],
+		"R": ['Z'],
+		"Z": ['Y'],
+		"Y": []
+	}
+	node_positions = None
+	X = ['X1','X2']
+	Y = ['Y']
+	return [graph_dict, node_positions, X, Y]
 
 
