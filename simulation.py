@@ -626,7 +626,7 @@ if __name__ == "__main__":
 	random.seed(seednum)
 
 	list_num_samples = [100, 20000, 50000, 100000]
-	list_of_estimators = ['OM', 'IW', 'DML']
+	list_of_estimators = ['OM', 'IPW', 'DML']
 	
 	if example_number != 0: # Non random
 		scm, X, Y, example_name, cluster_variables = call_examples(seednum, example_number, dim=sim_dim)

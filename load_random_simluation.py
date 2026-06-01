@@ -79,7 +79,7 @@ if __name__ == "__main__":
 	# ---- load + reshape ---------------------------------------------------
 	perf_dict = read_performance_dict(pkl_path, stem)
 	df = dict2df(perf_dict)
-	df["estimator"].replace({"IPW": "IW"}, inplace=True)  # rename once
+	df["estimator"] = df["estimator"].replace({"IPW": "IW"})  # rename once (CoW-safe)
 
 	# ---- helper aggregates ------------------------------------------------
 	cell_stats = (df.groupby(["SCM_seed", "num_sample", "estimator"], as_index=False)

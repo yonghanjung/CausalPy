@@ -79,8 +79,9 @@ def _solve_single_step_weights(n, subgroup_indices, moment_features, target_mome
     # --- Constraints ---
     # Constraint 1: sum(w_i) = n
     A1 = sparse.csr_matrix(np.ones((1, m)))
-    l1 = np.array([n - (epsilon/target_moment_sum) * n])
-    u1 = np.array([n + (epsilon/target_moment_sum) * n])
+    _ratio = (epsilon / target_moment_sum) if target_moment_sum != 0 else 0.0
+    l1 = np.array([n - _ratio * n])
+    u1 = np.array([n + _ratio * n])
 
     # Constraint 2: sum(w_i * moment_feature_i) = target_moment_sum +/- epsilon
     A2 = sparse.csr_matrix(moment_features.reshape(1, -1))
@@ -103,7 +104,7 @@ def _solve_single_step_weights(n, subgroup_indices, moment_features, target_mome
     prob.setup(P=P, q=q, A=A, l=l, u=u, verbose=False, polish=True)
     res = prob.solve()
 
-    if res.info.status != 'solved':
+    if res.info.status not in ('solved', 'solved inaccurate'):
         raise RuntimeError(f"OSQP failed to solve the QP. Status: {res.info.status}")
 
     return res.x
@@ -205,12 +206,6 @@ def mean_confidence_interval(data, confidence=0.95):
 	margin_of_error = sem * stats.t.ppf((1 + confidence) / 2., len(data) - 1)
 	return mean, margin_of_error
 
-# Extract error bars
-def extract_error_bars(data):
-	means = data
-	errors = ci_acc
-	return means, errors
-
 def add_noise(vec,add_noise_TF):
 	if add_noise_TF:
 		n = len(vec)
@@ -255,7 +250,7 @@ def learn_pi(obs, col_feature, col_label, params=None):
 			'gamma': 0,
 			'max_depth': 20,
 			'min_child_weight': 1,
-			'subsample': 0.0,
+			'subsample': 1.0,
 			'colsample_bytree': 1,
 			'objective': 'binary:logistic',  # Change as per your objective
 			'eval_metric': 'logloss',  # Change as per your needs
@@ -277,7 +272,7 @@ def learn_multi_pi(obs, col_feature, col_label, params=None):
 			'gamma': 0,
 			'max_depth': 20,
 			'min_child_weight': 1,
-			'subsample': 0.0,
+			'subsample': 1.0,
 			'colsample_bytree': 1,
 			'objective': 'multi:softprob',  # Change as per your objective
 			'num_class': len(np.unique(obs[col_label])),
@@ -306,7 +301,7 @@ def find_mu_param(obs):
 	# 	'eval_metric': 'rmse',
 	# 	'n_jobs': 4  # Assuming you have 4 cores
 	# }
-	xgb_model = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse', n_jobs=4, booser = 'gbtree', gamma = 0, min_child_weight=1, subsample = 0.8, alpha=0)
+	xgb_model = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse', n_jobs=4, booster = 'gbtree', gamma = 0, min_child_weight=1, subsample = 0.8, alpha=0)
 
 	# Define the parameter grid
 	param_grid = {
@@ -343,8 +338,11 @@ def compute_performance(truth, ATE):
 	rank_correlation_pvalue = {}
 
 	for estimator in list(ATE.keys()):
-		performance[estimator] = np.mean(np.abs(np.array(list(truth.values())) - np.array(list(ATE[estimator].values()))))
-		rank_correlation_pvalue[estimator] = list( spearmanr(list(truth.values()), list(ATE[estimator].values())) )
+		keys = list(truth.keys())
+		truth_vals = np.array([truth[k] for k in keys])
+		ate_vals = np.array([ATE[estimator][k] for k in keys])
+		performance[estimator] = np.mean(np.abs(truth_vals - ate_vals))
+		rank_correlation_pvalue[estimator] = list( spearmanr(truth_vals, ate_vals) )
 	
 	performance_table_data = [[estimator] + [performance[estimator]] for estimator in performance]
 	performance_table_header = ["Estimator", "Error"]

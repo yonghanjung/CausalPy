@@ -669,13 +669,12 @@ def contiguous_series(G,W,topo_V = None):
 	return list(tuple(best_seq))
 
 def find_successors(G,W,topo_V = None):
-	W_cont = contiguous_series(G,W)
-	if set(W_cont) != set(W):
-		raise(f"{W} is not contiguous")
-	
 	if topo_V == None:
 		topo_V = find_topological_order(G)
 	W = sorted(W, key=lambda x: topo_V.index(x))
+	W_cont = contiguous_series(G,W)
+	if set(W_cont) != set(W):
+		raise ValueError(f"{W} is not contiguous")
 	return(topo_V[topo_V.index(W[-1])+1:])
 
 def find_predecessors(G,W,topo_V = None):
