@@ -21,7 +21,6 @@ import tian
 import statmodules
 
 import identify
-import est_BD
 import est_mSBD
 import example_SCM
 	
@@ -837,22 +836,27 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 	cluster_variables = kwargs.get('cluster_variables', None)
 	# print(cluster_variables)
 
+	# Stage-2 rewire: normalize cluster info into a cluster_map for the BD/SBD/mSBD estimators.
+	cluster_map = kwargs.get('cluster_map', None)
+	if cluster_map is None:
+		if isinstance(cluster_variables, dict):
+			cluster_map = cluster_variables
+		elif isinstance(cluster_variables, list):
+			cluster_map = graph.build_cluster_map(cluster_variables, obs_data)
+
 	# Check various criteria
 	satisfied_BD = adjustment.check_admissibility(G, X, Y)
 	# Handle different cases based on criteria
-	if satisfied_BD: 
-		if cluster_variables is None:
-			ATE, _, _, _ = est_mSBD.estimate_BD(G, X, Y, obs_data, only_OM=False)
-		else: 
-			ATE, _, _, _ = est_mSBD.estimate_BD(G, X, Y, obs_data, only_OM=False, cluster_variables = cluster_variables)
+	if satisfied_BD:
+		ATE, _, _, _ = est_mSBD.estimate_BD(G, X, Y, obs_data, cluster_map=cluster_map, only_OM=only_OM, seednum=seednum)
 		return clip_ATE(ATE)
 
 	satisfied_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
 	if satisfied_mSBD:
 		if len(Y) == 1:
-			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, only_OM=False, cluster_variables = cluster_variables)
+			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, cluster_map=cluster_map, only_OM=only_OM, seednum=seednum)
 		else:
-			ATE, _, _, _ = est_mSBD.estimate_mSBD(G, X, Y, y_val, obs_data, only_OM=False, cluster_variables = cluster_variables)
+			ATE, _, _, _ = est_mSBD.estimate_mSBD_y(G, X, Y, y_val, obs_data, cluster_map=cluster_map, only_OM=only_OM, seednum=seednum)
 		return clip_ATE(ATE)
 
 	satisfied_Tian = tian.check_Tian_criterion(G, X)
