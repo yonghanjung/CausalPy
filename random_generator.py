@@ -84,6 +84,8 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 			if kwargs.get('sparcity_constant') is None:
 				np.random.seed(graph_seed)
 				sparcity_constant = np.random.uniform(0.0, 1.0)
+			else:
+				sparcity_constant = kwargs.get('sparcity_constant')
 	
 			[graph_dict, node_positions, X, Y] = graph.generate_random_graph(
 				num_observables=num_observables,
