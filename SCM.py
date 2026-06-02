@@ -243,7 +243,7 @@ class StructuralCausalModel:
 		Returns:
 			pandas.DataFrame: A DataFrame containing only the observed variables.
 		"""
-		full_data = self.generate_samples(num_samples)
+		full_data = self.generate_samples(num_samples, seed=seed)
 
 		# Filter out columns that start with 'U'
 		observational_cols = [
