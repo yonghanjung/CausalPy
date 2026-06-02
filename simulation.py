@@ -325,7 +325,7 @@ def random_scm_experiments(seednum, **kwargs):
 	# scenario = 2
 
 	num_sim = kwargs.get('num_sim', 4)
-	list_of_samples = kwargs.get('list_of_samples', [100, 20000, 50000, 100000])
+	list_num_samples = kwargs.get('list_num_samples', [100, 20000, 50000, 100000])
 	# list_of_samples = kwargs.get('list_of_samples', [50, 100, 200, 500])
 	# num_sample = kwargs.get('num_sample', 1000)
 	simulation_round = kwargs.get('simulation_round', 3)
