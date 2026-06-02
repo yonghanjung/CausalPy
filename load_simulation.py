@@ -109,7 +109,7 @@ if __name__ == "__main__":
 	pkl_path = 'log_experiments/pkl/'
 	fig_path = 'log_experiments/plot/'
 
-	filename = f'{sim_date}{sim_time}_{example_name}_seednum{seednum}_scenario{scenario}_round{simulation_round}'
+	filename = f'FixedSim_{sim_date}{sim_time}_{example_name}_seednum{seednum}_scenario{scenario}_round{simulation_round}'
 
 	readSimulation(pkl_path, fig_path, filename)
 
