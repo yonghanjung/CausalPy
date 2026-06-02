@@ -28,32 +28,13 @@ warnings.filterwarnings("ignore", category=ConstantInputWarning)
 @contextmanager
 def simulate_scenario(scenario):
 	original_xgb_predict = est_mSBD.xgb_predict
-	original_entropy_balancing_osqp = statmodules.entropy_balancing_osqp
 
 	if scenario == 1:
 		# Do nothing
 		pass
 	
-	elif scenario == 2: 
-		# Modify the train_ML_model to add noise
-		def noisy_predict(model, data, col_feature):
-			pred = original_xgb_predict(model, data, col_feature)
-			noise_mean = data.shape[0] ** (-1/4)
-			noise_scale = data.shape[0] ** (-1/4)
-			scale_param = np.max([1.0, np.mean(pred)])
-			return pred + scale_param * np.random.normal(loc = noise_mean, scale = noise_scale, size = len(data))
-
-		def noisy_EB(obs, x_val, X, Z, col_feature_1, col_feature_2):
-			pred = original_entropy_balancing_osqp(obs, x_val, X, Z, col_feature_1, col_feature_2)
-			if pred is None:
-				# Handle the case where pred is None
-				raise ValueError("The original entropy balancing function returned None")
-			noise_mean = obs.shape[0] ** (-1/4)
-			noise_scale = obs.shape[0] ** (-1/4)
-			return pred + np.random.normal(loc = noise_mean, scale = noise_scale, size = len(obs))
-
-		est_mSBD.xgb_predict = noisy_predict
-		statmodules.entropy_balancing_osqp = noisy_EB
+	elif scenario == 2:
+		raise NotImplementedError("scenario 2 disabled (BUG-N04): it perturbed the removed statmodules.entropy_balancing_osqp; re-wire to sequential_quadratic_balancing before re-enabling")
 
 
 	elif scenario == 3: 
@@ -71,24 +52,16 @@ def simulate_scenario(scenario):
 		est_mSBD.xgb_predict = contimated_predict
 		# est_mSBD.xgb_predict = contimated_predict2
 
-	elif scenario == 4: 
-		def contimated_balancing(obs, x_val, X, Z, col_feature_1, col_feature_2): 
-			random_data = np.random.rand(len(obs))
-			return np.clip(random_data, a_min=0, a_max = None)
+	elif scenario == 4:
+		raise NotImplementedError("scenario 4 disabled (BUG-N04): it perturbed the removed statmodules.entropy_balancing_osqp; re-wire to sequential_quadratic_balancing before re-enabling")
 
-		def contimated_balancing2(obs, x_val, X, Z, col_feature_1, col_feature_2): 
-			# random_data = np.zeros(len(obs))
-			random_data = np.ones(len(obs))*0
-			return np.clip(random_data, a_min=0, a_max = None)
-
-		statmodules.entropy_balancing_osqp = contimated_balancing
-		# statmodules.entropy_balancing_osqp = contimated_balancing2
+	else:
+		raise ValueError(f"Unknown scenario: {scenario}")
 
 	try:
 		yield
 	finally:
 		est_mSBD.xgb_predict = original_xgb_predict
-		statmodules.entropy_balancing_osqp = original_entropy_balancing_osqp
 
 def run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, scenario, seednum, scm, X, Y, pkl_path, filename, **kwargs):
 	random.seed(seednum)
@@ -330,7 +303,7 @@ def random_scm_experiments(seednum, **kwargs):
 	# num_sample = kwargs.get('num_sample', 1000)
 	simulation_round = kwargs.get('simulation_round', 3)
 	cluster_variables = kwargs.get('cluster_variables', {})
-	scenario = kwargs.get('scenario', 2)
+	scenario = kwargs.get('scenario', 1)
 	list_of_estimators = kwargs.get('list_of_estimators', ['OM', 'IPW', 'DML'])
 	
 	individual_simulation_counter = 0 
