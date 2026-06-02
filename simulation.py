@@ -32,10 +32,7 @@ def simulate_scenario(scenario):
 
 	if scenario == 1:
 		# Do nothing
-		yield 
-
-		est_mSBD.xgb_predict = original_xgb_predict
-		statmodules.entropy_balancing_osqp = original_entropy_balancing_osqp
+		pass
 	
 	elif scenario == 2: 
 		# Modify the train_ML_model to add noise
@@ -58,11 +55,6 @@ def simulate_scenario(scenario):
 		est_mSBD.xgb_predict = noisy_predict
 		statmodules.entropy_balancing_osqp = noisy_EB
 
-		yield 
-
-		est_mSBD.xgb_predict = original_xgb_predict
-		statmodules.entropy_balancing_osqp = original_entropy_balancing_osqp
-
 
 	elif scenario == 3: 
 		def contimated_predict(model, data, col_feature):
@@ -79,10 +71,6 @@ def simulate_scenario(scenario):
 		est_mSBD.xgb_predict = contimated_predict
 		# est_mSBD.xgb_predict = contimated_predict2
 
-		yield 
-
-		est_mSBD.xgb_predict = original_xgb_predict
-
 	elif scenario == 4: 
 		def contimated_balancing(obs, x_val, X, Z, col_feature_1, col_feature_2): 
 			random_data = np.random.rand(len(obs))
@@ -96,8 +84,10 @@ def simulate_scenario(scenario):
 		statmodules.entropy_balancing_osqp = contimated_balancing
 		# statmodules.entropy_balancing_osqp = contimated_balancing2
 
-		yield 
-
+	try:
+		yield
+	finally:
+		est_mSBD.xgb_predict = original_xgb_predict
 		statmodules.entropy_balancing_osqp = original_entropy_balancing_osqp
 
 def run_DML_simulation(simulation_round, list_num_samples, list_of_estimators, scenario, seednum, scm, X, Y, pkl_path, filename, **kwargs):
