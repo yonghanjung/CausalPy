@@ -39,7 +39,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 	
 
 	# --- Parameters for search control ---
-	max_graphs_to_test = kwargs.get('max_graphs', 1e7)
+	max_graphs_to_test = kwargs.get('max_graphs', int(1e7))
 	max_consecutive_duplicates = kwargs.get('max_consecutive_duplicates', 10000)
 	max_retries = kwargs.get('max_retries', 50)
 
@@ -57,7 +57,7 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 	# --- Outer Retry Loop: Resets the main seed on failure ---
 	for retry_attempt in range(max_retries):
 		# Use the initial seed on the first try, then a random one for retries.
-		current_seed = master_rng.randint(0, 1e7)
+		current_seed = master_rng.randint(0, int(1e7))
 		random.seed(current_seed)
 		np.random.seed(current_seed)
   
@@ -79,11 +79,13 @@ def random_graph_generator(num_observables, num_unobservables, num_treatments, n
 
 			# --- Generate a new graph ---
 			# Each graph gets its own seed from the main random generator's sequence.
-			graph_seed = random.randint(0, 1e7)
+			graph_seed = random.randint(0, int(1e7))
    
 			if kwargs.get('sparcity_constant') is None:
 				np.random.seed(graph_seed)
 				sparcity_constant = np.random.uniform(0.0, 1.0)
+			else:
+				sparcity_constant = kwargs.get('sparcity_constant')
 	
 			[graph_dict, node_positions, X, Y] = graph.generate_random_graph(
 				num_observables=num_observables,

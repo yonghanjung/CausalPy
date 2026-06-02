@@ -73,7 +73,7 @@ if __name__ == "__main__":
 		if satisfied_BD == False and satisfied_mSBD == False and satisfied_FD == False and satisfied_Tian == False and satisfied_gTian == False and satisfied_product:
 			graph_type['MECE_product'] += 1
 
-		if satisfied_BD == False and satisfied_mSBD == False and satisfied_Tian == False and satisfied_gTian == False and satisfied_product == False:
+		if satisfied_BD == False and satisfied_mSBD == False and satisfied_FD == False and satisfied_Tian == False and satisfied_gTian == False and satisfied_product == False:
 			graph_type['Ratio'] += 1
 
 		graph_counter += 1 
