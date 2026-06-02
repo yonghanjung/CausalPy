@@ -110,7 +110,7 @@ class StructuralCausalModel:
 			for var, coef in coefficients.items():
 				linear_part += coef * args[var]
 			linear_part += intercept + noise
-			return np.random.binomial(1, 1 / (1 + np.exp(-linear_part)))
+			return np.random.binomial(1, expit(linear_part))
 
 		return binary_equation
 	
