@@ -110,7 +110,7 @@ class StructuralCausalModel:
 			for var, coef in coefficients.items():
 				linear_part += coef * args[var]
 			linear_part += intercept + noise
-			return np.random.binomial(1, 1 / (1 + np.exp(-linear_part)))
+			return np.random.binomial(1, expit(linear_part))
 
 		return binary_equation
 	
@@ -243,7 +243,7 @@ class StructuralCausalModel:
 		Returns:
 			pandas.DataFrame: A DataFrame containing only the observed variables.
 		"""
-		full_data = self.generate_samples(num_samples)
+		full_data = self.generate_samples(num_samples, seed=seed)
 
 		# Filter out columns that start with 'U'
 		observational_cols = [
