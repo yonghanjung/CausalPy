@@ -366,7 +366,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **k
 		pa_roota = get_values(variables = PA_RootA, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
 
 		# Compute the Q value for RootA
-		Q_roota, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA, pa_roota, roota, obs_data, only_OM = only_OM, seednum = seednum)
+		Q_roota, _, _, _  = est_mSBD.estimate_mSBD_xy(G, PA_RootA, RootA, pa_roota, roota, obs_data, only_OM = only_OM, seednum = seednum)
 		return Q_roota
 
 	def handle_Next_RootA(RootA, PA_RootA, Next_RootA, Superset_Values, X, Y, superset_values, x_val, y_val):
@@ -403,7 +403,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **k
 		# Check if the SAC criterion is satisfied for RootA_minus_Next
 		if mSBD.constructive_SAC_criterion(G, PA_RootA, RootA_minus_Next):
 			roota_minus_next =  [roota[RootA.index(variable)] for variable in RootA_minus_Next]
-			Q_roota_minus_next, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_minus_Next, pa_roota, roota_minus_next, obs_data, only_OM = only_OM, seednum = seednum) 
+			Q_roota_minus_next, _, _, _  = est_mSBD.estimate_mSBD_xy(G, PA_RootA, RootA_minus_Next, pa_roota, roota_minus_next, obs_data, only_OM = only_OM, seednum = seednum) 
 			for estimator in list_estimators:
 				Q_roota_next[estimator] = min((Q_roota[estimator] / Q_roota_minus_next[estimator]), 1)
 			
@@ -423,7 +423,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **k
 				Vj_i_index = RootA.index(Vj_i)
 				RootA_leq_i = RootA[:(Vj_i_index+1)]
 				roota_leq_i = get_values(variables = RootA_leq_i, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
-				Q_roota_leq_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_leq_i, pa_roota, roota_leq_i, obs_data, only_OM = only_OM, seednum = seednum)
+				Q_roota_leq_i, _, _, _  = est_mSBD.estimate_mSBD_xy(G, PA_RootA, RootA_leq_i, pa_roota, roota_leq_i, obs_data, only_OM = only_OM, seednum = seednum)
 
 				if Vj_i_index == 0:
 					for estimator in list_estimators:
@@ -431,7 +431,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **k
 				else:
 					RootA_less_i = RootA[:(Vj_i_index)]
 					roota_less_i = get_values(variables = RootA_less_i, Superset_Values = Superset_Values, X = X, Y = Y, superset_values = superset_values, x_val = x_val, y_val = y_val)
-					Q_roota_less_i, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_RootA, RootA_less_i, pa_roota, roota_less_i, obs_data, only_OM = only_OM, seednum = seednum)
+					Q_roota_less_i, _, _, _  = est_mSBD.estimate_mSBD_xy(G, PA_RootA, RootA_less_i, pa_roota, roota_less_i, obs_data, only_OM = only_OM, seednum = seednum)
 					for estimator in list_estimators:
 						Q_roota_next[estimator] *= Q_roota_leq_i[estimator]
 					Q_roota_next[estimator] *= min((Q_roota_leq_i[estimator] / Q_roota_less_i[estimator]), 1)
@@ -529,7 +529,7 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **k
 						Q_Sprev[estimator] = {}
 
 					for s_prev in domain_Sprev:
-						Q_Sprev_val, _, _, _ = est_mSBD.estimate_mSBD_xval_yval(G, PA_Sprev, S_prev, list(pa_sprev_value.values()), s_prev, obs_data, only_OM = only_OM, seednum = seednum)
+						Q_Sprev_val, _, _, _ = est_mSBD.estimate_mSBD_xy(G, PA_Sprev, S_prev, list(pa_sprev_value.values()), s_prev, obs_data, only_OM = only_OM, seednum = seednum)
 						for estimator in list_estimators:
 							Q_Sprev[estimator][s_prev] = Q_Sprev_val[estimator]
 
@@ -640,7 +640,7 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kw
 				for variable in PA_V_SX
 			]
 			# Compute Q[V\SX] 
-			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum)
+			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xy(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum)
 
 			# Compute Q[SX\X] 
 			# di is the realization of Di, defined as follow: For a portion Di \intersect D_minus_Y, take its value from d_minus_y. For Di \setminus D_minus_Y, take the value from y_val.
@@ -655,7 +655,7 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kw
 				for variable in PA_SX_X
 			]
 			# Compute Q[SX_X] 
-			Q_SX_X_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_SX_X, SX_X, pa_sx_x, sx_x, obs_data, only_OM = only_OM, seednum = seednum)
+			Q_SX_X_val, _, _, _  = est_mSBD.estimate_mSBD_xy(G, PA_SX_X, SX_X, pa_sx_x, sx_x, obs_data, only_OM = only_OM, seednum = seednum)
 
 			for estimator in list_estimators:
 				ATE[estimator][tuple(x_val)] += (Q_V_SX_val[estimator] * Q_SX_X_val[estimator])
@@ -733,7 +733,7 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
 				for variable in PA_V_SX
 			]
 			# Compute Q[V\SX] 
-			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum)
+			Q_V_SX_val, _, _, _  = est_mSBD.estimate_mSBD_xy(G, PA_V_SX, V_SX, pa_v_sx, v_sx, obs_data, only_OM = only_OM, seednum = seednum)
 			for estimator in list_estimators:
 				Q_VX_val[estimator] *= Q_V_SX_val[estimator]
 
@@ -756,7 +756,7 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
 					for variable in PA_SXi_XCi
 				]
 				# Compute Q[SX_X] 
-				Q_SXi_Xci_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, PA_SXi_XCi, SXi_XCi, pa_sx_x, sxi_xci, obs_data, only_OM = only_OM, seednum = seednum)
+				Q_SXi_Xci_val, _, _, _  = est_mSBD.estimate_mSBD_xy(G, PA_SXi_XCi, SXi_XCi, pa_sx_x, sxi_xci, obs_data, only_OM = only_OM, seednum = seednum)
 				for estimator in list_estimators:
 					Q_VX_val[estimator] *= Q_SXi_Xci_val[estimator]
 
@@ -815,7 +815,7 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123
 				]
 
 				# Compute Q[Di] := P(di | do(xi)) 
-				Q_Di_val, _, _, _  = est_mSBD.estimate_mSBD_xval_yval(G, Xi, Di, xi, di, obs_data, only_OM = only_OM, seednum = seednum)
+				Q_Di_val, _, _, _  = est_mSBD.estimate_mSBD_xy(G, Xi, Di, xi, di, obs_data, only_OM = only_OM, seednum = seednum)
 
 				for estimator in list_estimators:
 					Q_D_val[estimator] *= Q_Di_val[estimator]
