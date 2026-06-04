@@ -469,10 +469,7 @@ def estimate_mSBD_y(G, X, Y, y_policy, obs_data, alpha_CI=0.05, cluster_map=None
                         col_feature_i.extend(dict_X[f'X{j}'])
                         col_feature_i.extend(dict_Z[f'Z{j}'])
                     
-                    def get_sort_key(node):
-                        base_node = reverse_cluster_map.get(node, node)
-                        return topo_V.index(base_node)
-                    col_feature_i = sorted(list(set(col_feature_i)), key=get_sort_key)
+                    col_feature_i = sorted(set(col_feature_i))
                     
                     label_data = check_mu_train_fold[i + 1]
                     label_col_name = f'pseudo_outcome_label_for_stage_{i+1}'
