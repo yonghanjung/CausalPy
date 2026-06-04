@@ -96,7 +96,7 @@ def estimate_BD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, s
     else:
         # Case 2: Confounding, use DML with cross-fitting
         kf = KFold(n_splits=n_folds, shuffle=True, random_state=int(seednum))
-        col_feature = list(set(Z_unfold + X_unfold))
+        col_feature = sorted(set(Z_unfold + X_unfold))
         
         mu_XZ_preds = np.zeros(len(obs_data))
         mu_xZ_preds = {tuple(x_val): np.zeros(len(obs_data)) for _, x_val in X_values_combinations.iterrows()}
@@ -268,10 +268,7 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, 
                         col_feature_i.extend(dict_X[f'X{j}'])
                         col_feature_i.extend(dict_Z[f'Z{j}'])
                     
-                    # def get_sort_key(node):
-                    #     base_node = reverse_cluster_map.get(node, node)
-                    #     return topo_V.index(base_node)
-                    # col_feature_i = sorted(list(set(col_feature_i)), key=get_sort_key)
+                    col_feature_i = sorted(set(col_feature_i))
                     
                     label_data = check_mu_train_fold[i + 1]
                     label_col_name = f'pseudo_outcome_label_for_stage_{i+1}'
