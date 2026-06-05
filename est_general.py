@@ -320,6 +320,9 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **k
 	A dictionary where the keys are tuples of X values and the values are the estimated ATE.
 	"""
 
+	if not only_OM:
+		raise NotImplementedError("IPW/DML c-component assembly is not implemented; use only_OM=True")
+
 	def get_values(variables, Superset_Values, X, Y, superset_values, x_val, y_val):
 		"""
 		Get the realized values for the specified variables.
@@ -597,6 +600,9 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **k
 
 def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kwargs):
 
+	if not only_OM:
+		raise NotImplementedError("IPW/DML c-component assembly is not implemented; use only_OM=True")
+
 	cluster_variables = kwargs.get('cluster_variables', None)
 
 	np.random.seed(int(seednum))
@@ -663,6 +669,8 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kw
 	return ATE
 
 def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
+	if not only_OM:
+		raise NotImplementedError("IPW/DML c-component assembly is not implemented; use only_OM=True")
 	cluster_variables = kwargs.get('cluster_variables', None)
 
 	np.random.seed(int(seednum))
@@ -766,6 +774,8 @@ def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
 	return ATE
 
 def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
+	if not only_OM:
+		raise NotImplementedError("IPW/DML c-component assembly is not implemented; use only_OM=True")
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
@@ -861,21 +871,21 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 
 	satisfied_Tian = tian.check_Tian_criterion(G, X)
 	if satisfied_Tian:
-		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM=False, cluster_variables = cluster_variables)
+		ATE = estimate_Tian(G, X, Y, y_val, obs_data, only_OM=True, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
 
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 	if satisfied_gTian:
-		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM=False)
+		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM=True)
 		return clip_ATE(ATE)
 
 	satisfied_product = tian.check_product_criterion(G, X, Y)
 	if satisfied_product:
-		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM=False)
+		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM=True)
 		return clip_ATE(ATE)
 
 	else:
-		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM=False, cluster_variables = cluster_variables)
+		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM=True, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
 
 
