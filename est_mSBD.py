@@ -3,6 +3,7 @@ import pandas as pd
 from itertools import product
 from itertools import chain
 from sklearn.model_selection import KFold
+from sklearn.linear_model import LogisticRegression
 import xgboost as xgb
 import copy
 from scipy.stats import spearmanr
@@ -635,8 +636,23 @@ def estimate_mSBD_xy(G, X, Y, x_policy, y_policy, obs_data, alpha_CI=0.05, clust
     if not all_Z:
         # Case 1: No confounding, simple stratified estimation for the single x_policy
         mask = (obs_data[X] == x_val_row.values).all(axis=1)
-        mean_val = obs_data.loc[mask, Y_label].mean()
-        var_val = obs_data.loc[mask, Y_label].var()
+        # Defensive support fix for continuous / high-cardinality conditioning columns:
+        # exact-value stratification yields empty/singleton masks (-> nan) for such columns;
+        # fall back to a regression of the indicator P(Y_label=1 | X) evaluated at x_policy.
+        # Discrete sufficient-support conditioning keeps the original exact-mask path.
+        _high_card = any(obs_data[col].nunique() > 10 for col in X)
+        # Guard: LogisticRegression requires BOTH classes (0 and 1) in the indicator.
+        # For a one-class indicator (e.g. continuous-as-outcome I(C==c), which is out of
+        # this fix's scope) keep the original exact-mask path so this patch does not
+        # silently alter / "fix" those cases (the prior result, including nan, is preserved).
+        if X and obs_data[Y_label].nunique() >= 2 and (_high_card or int(mask.sum()) < 10):
+            _reg = LogisticRegression(max_iter=2000).fit(
+                obs_data[X].astype(float).values, obs_data[Y_label].values)
+            mean_val = float(_reg.predict_proba(np.array([list(x_policy)], dtype=float))[0, 1])
+            var_val = mean_val * (1.0 - mean_val)
+        else:
+            mean_val = obs_data.loc[mask, Y_label].mean()
+            var_val = obs_data.loc[mask, Y_label].var()
         for est in list_estimators:
             results[est]['ATE'] = mean_val
             results[est]['VAR'] = var_val
