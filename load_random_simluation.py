@@ -17,7 +17,10 @@ import dill as pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
+try:
+    import seaborn as sns
+except ImportError:  # optional: seaborn is only used for plotting cosmetics in __main__
+    sns = None
 from matplotlib.ticker import FuncFormatter
 import os 
 
@@ -90,6 +93,8 @@ if __name__ == "__main__":
 							   q25=lambda s: s.quantile(.25),
 							   q75=lambda s: s.quantile(.75)))
 
+	if sns is None:
+		raise ImportError("seaborn is required to run load_random_simluation.py plotting mode")
 	sns.set_style("whitegrid")
 	# Define color_map, palette, and SHOW_LEGEND before they are used
 	color_map = {
