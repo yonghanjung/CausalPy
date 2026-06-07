@@ -668,10 +668,10 @@ def estimate_Tian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kw
 
 	return ATE
 
-def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123):
+def estimate_gTian(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123, **kwargs):
 	if not only_OM:
 		raise NotImplementedError("IPW/DML c-component assembly is not implemented; use only_OM=True")
-	cluster_variables = kwargs.get('cluster_variables', None)
+	cluster_variables = kwargs.get('cluster_variables', None) or []
 
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
@@ -876,7 +876,7 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 
 	satisfied_gTian = tian.check_Generalized_Tian_criterion(G, X)
 	if satisfied_gTian:
-		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM=True)
+		ATE = estimate_gTian(G, X, Y, y_val, obs_data, only_OM=True, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
 
 	satisfied_product = tian.check_product_criterion(G, X, Y)
