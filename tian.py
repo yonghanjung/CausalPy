@@ -48,7 +48,10 @@ def check_Tian_criterion(G,X):
 		return False
 
 def check_product_criterion(G,X,Y):
-	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
+	result = identify.return_AC_tree(G, X, Y)
+	if result is None:
+		return False
+	adj_dict_components, adj_dict_operations = result
 	for adj_dict_component in adj_dict_components.values():
 		if len(adj_dict_component) > 1:
 			return False 
