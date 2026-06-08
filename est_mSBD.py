@@ -196,7 +196,8 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, 
     Parameters:
     G : Causal graph structure.
     X : List of treatment variables.
-    Y : List of outcome variables.
+    Y : Single outcome as a length-1 list. estimate_SBD is single-outcome only;
+        use estimate_mSBD_y for multiple outcomes.
     obs_data : Observed data (Pandas DataFrame).
     alpha_CI : Confidence level for interval estimates (default 0.05).
     cluster_map : Dictionary mapping conceptual nodes to column names (default None).
@@ -207,6 +208,9 @@ def estimate_SBD(G, X, Y, obs_data, alpha_CI=0.05, cluster_map=None, n_folds=2, 
     Returns:
     A tuple containing dictionaries for ATE, Variance, Lower CI, and Upper CI.
     """
+    if len(Y) > 1:
+        raise ValueError("estimate_SBD supports a single outcome; use estimate_mSBD_y for multiple outcomes")
+
     # 1. --- Initial Setup ---
     np.random.seed(int(seednum))
     random.seed(int(seednum))
