@@ -14,8 +14,8 @@
 
 ## 범위
 
-- `identify.py`, `tian.py`, `est_Tian.py`: identification과 Tian-style estimand construction core.
-- `est_general.py`, `est_plugin.py`, `statmodules.py`, `mSBD.py`, `frontdoor.py`, `UCA.py`: estimation engine과 method-specific module.
+- `identify.py`, `tian.py`: identification과 Tian-style estimand construction core.
+- `est_general.py` (live c-component/Tian/gTian/product estimator), `statmodules.py`, `mSBD.py`, `frontdoor.py`, `UCA.py`: estimation engine과 method-specific module.
 - `graph.py`, `SCM.py`, `simulation.py`, `random_generator.py`: graph, SCM, simulation, data-generation layer.
 - `examples.py`, `example_SCM.py`, `test_ID.py`, `test_est.py`, `test_ID_proportion.py`: example과 test/smoke-check surface.
 - `log_experiments/`, `archived/`, `DevDoc/`, generated HTML files, generated plots, caches, local virtualenv-like folder는 사용자가 명시적으로 지정하지 않는 한 reference 또는 generated surface다.
