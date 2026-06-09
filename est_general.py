@@ -454,8 +454,11 @@ def estimate_general(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **k
 
 	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
 
-	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
-	
+	result = identify.return_AC_tree(G, X, Y)
+	if result is None:
+		raise NotImplementedError("P(Y|do(X)) for this graph is not supported by the c-component estimator (no AC-tree decomposition)")
+	adj_dict_components, adj_dict_operations = result
+
 	# Find V\X and create the corresponding subgraph
 	topo_V = graph.find_topological_order(G)
 	V_minus_X = list(set(G.nodes()).difference(set(X)))
@@ -779,7 +782,10 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123
 	np.random.seed(int(seednum))
 	random.seed(int(seednum))
 
-	adj_dict_components, adj_dict_operations = identify.return_AC_tree(G, X, Y)
+	result = identify.return_AC_tree(G, X, Y)
+	if result is None:
+		raise NotImplementedError("P(Y|do(X)) for this graph is not supported by the product-QD c-component estimator (no AC-tree decomposition)")
+	adj_dict_components, adj_dict_operations = result
 	for adj_dict_component in adj_dict_components.values():
 		if len(adj_dict_component) > 1:
 			raise ValueError("QD linearity is not satisfied ")
