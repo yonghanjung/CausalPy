@@ -172,7 +172,7 @@ def all_possible_orders_X(G,X):
 	for order in all_topological_orders(G, X):
 		if order not in X_list:
 			X_list.append(order)
-	return X_list 
+	return sorted(X_list) 
 
 
 def subgraphs(G,C):
