@@ -526,15 +526,16 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 		return Q_W
 
 	def print_estimand(causal_expression, latex, copyTF=True):
-		if latex:
-			pyperclip.copy(causal_expression)
+		if latex and copyTF:
+			try:
+				pyperclip.copy(causal_expression)
+			except Exception:
+				pass
 			plt.figure("estimand",figsize=(15, 6))
 			plt.text(0.5, 0.5, f'${causal_expression}$', fontsize=15, ha='center')
 			plt.axis('off')
 			plt.show(block=False)
-			return None
-		else: 
-			return causal_expression
+		return causal_expression
 	
 	# Prepare "X, Y" to be printed 
 	topo_V = graph.find_topological_order(G)
@@ -578,7 +579,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 		estimand = f" = {adjustment.adjustment_estimand(X,Y,Z, latex)}"
 		causal_expression += estimand
 		print(message)
-		return print_estimand(causal_expression, latex)
+		return print_estimand(causal_expression, latex, copyTF)
 
 	# Check if P(Y | do(x)) can be estimated through the mSBD
 	condition_mSBD = mSBD.constructive_SAC_criterion(G, X, Y)
@@ -588,7 +589,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 		estimand = f" = {mSBD.mSBD_estimand(G, X, Y, latex, minimum=True)}"
 		causal_expression += estimand
 		print(message)
-		return print_estimand(causal_expression, latex)
+		return print_estimand(causal_expression, latex, copyTF)
 		
 	# Check if P(Y | do(x)) can be estimated through the FD
 	condition_FD = frontdoor.constructive_minimum_FD(G,X,Y)
@@ -600,7 +601,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 		estimand = f" = {frontdoor.frontdoor_estimand(X,Y,Z,C,latex)}"
 		causal_expression += estimand
 		print(message)
-		return print_estimand(causal_expression, latex)
+		return print_estimand(causal_expression, latex, copyTF)
 
 	# Check if P(Y | do(x)) can be estimated through the Tian's adjustment
 	condition_Tian = tian.check_Tian_criterion(G, X)
@@ -609,7 +610,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 		estimand = f" = {tian.Tian_estimand(G, X, Y, latex, topo_V = None)}"
 		causal_expression += estimand
 		print(message)
-		return print_estimand(causal_expression, latex)
+		return print_estimand(causal_expression, latex, copyTF)
 
 	# Check if P(Y | do(x)) can be estimated through the Generalized Tian's adjustment
 	condition_generalized_Tian = tian.check_Generalized_Tian_criterion(G, X)
@@ -618,7 +619,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 		estimand = f" = {tian.generalized_Tian_estimand(G, X, Y, latex, topo_V = None)}"
 		causal_expression += estimand
 		print(message)
-		return print_estimand(causal_expression, latex)
+		return print_estimand(causal_expression, latex, copyTF)
 
 	
 	# Initialize dictionaries to hold the adjusted components and operations
@@ -811,7 +812,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 				causal_expression = f"P({{{Y_print}}} \\mid do({{{X_print}}})) = {Q_D}"
 	else:
 		# print("ho")
-		D_minus_Y = list(set(D).difference(set(Y)))
+		D_minus_Y = sorted(set(D).difference(set(Y)), key = lambda x: topo_V.index(x))
 		D_minus_Y_lower = [char.lower() for char in D_minus_Y]
 		D_minus_Y_values = ', '.join(D_minus_Y_lower)
 		if not latex:
