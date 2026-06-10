@@ -8,3 +8,4 @@ log_experiments/
 *.json
 *.html
 examples-PID/
+/CausalPy/
