@@ -72,9 +72,8 @@ it blocks the path and gives the classic adjustment formula
 
 `P(Y | do(X)) = Σ_c P(Y | C, X) P(C)`.
 
-> The left-to-right order *within* a conditioning set (e.g. `P(Y | C, X)` vs
-> `P(Y | X, C)`) comes from Python set iteration and can differ between runs — it is the
-> same set and the same estimand.
+> Within a conditioning set the variables are listed in a fixed sorted order
+> (e.g. always `P(Y | C, X)`), so the estimand string is reproducible across runs.
 
 ## 2. Front-door
 
@@ -90,7 +89,7 @@ print("estimand:", idq(G, X, Y))
 ```
 
     edges: ['C->X', 'C->Y', 'C->Z', 'U_CX->C', 'U_CX->X', 'U_CY->C', 'U_CY->Y', 'U_XY->X', 'U_XY->Y', 'X->Z', 'Z->Y']
-    estimand: P(Y | do(X)) = Σ_{z, c} P(Z | C, X)P(C) Σ_{x} P(Y | Z, C, X)P(X | C)
+    estimand: P(Y | do(X)) = Σ_{c, z} P(Z | C, X)P(C) Σ_{x} P(Y | C, X, Z)P(X | C)
 
 
 Even though `U_XY -> X` and `U_XY -> Y` are unobservable, the mediator `Z` is

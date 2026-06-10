@@ -433,9 +433,9 @@ def mSBD_estimand(G, X, Y, latex = False, minimum=False):
 
 		if len(Yi_1_Zi) > 0:
 			if not latex:
-				term = f"P({', '.join(Yi_1_Zi)}" + (f" | {', '.join(given_terms)}" if given_terms else "") + ")"
+				term = f"P({', '.join(sorted(Yi_1_Zi))}" + (f" | {', '.join(sorted(given_terms))}" if given_terms else "") + ")"
 			else:
-				term = f"P({', '.join(Yi_1_Zi)}" + (f" \\mid {', '.join(given_terms)}" if given_terms else "") + ")"
+				term = f"P({', '.join(sorted(Yi_1_Zi))}" + (f" \\mid {', '.join(sorted(given_terms))}" if given_terms else "") + ")"
 		else: 
 			continue
 		term_list.append(term)
@@ -444,12 +444,12 @@ def mSBD_estimand(G, X, Y, latex = False, minimum=False):
 	given_term_m = dict_H[f"H{m-1}"] + dict_X[f"X{m}"] + dict_Z[f"Z{m}"] 
 	if len(Ym) > 0:
 		if not latex: 
-			term_list.append(f"P({', '.join(Ym)}" + (f" | {', '.join(given_term_m)}" if given_term_m else "") + ")")
+			term_list.append(f"P({', '.join(sorted(Ym))}" + (f" | {', '.join(sorted(given_term_m))}" if given_term_m else "") + ")")
 		else:
-			term_list.append(f"P({', '.join(Ym)}" + (f" \\mid {', '.join(given_term_m)}" if given_term_m else "") + ")")
+			term_list.append(f"P({', '.join(sorted(Ym))}" + (f" \\mid {', '.join(sorted(given_term_m))}" if given_term_m else "") + ")")
 
 	summands = {z.lower() for values in dict_Z.values() for z in values}
-	summands_str = ', '.join(summands)
+	summands_str = ', '.join(sorted(summands))
 	term_list_expression = ' '.join(reversed(term_list))
 
 	if len(summands) > 0:

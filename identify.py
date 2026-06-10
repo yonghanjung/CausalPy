@@ -24,7 +24,7 @@ def preprocess_GXY_for_ID(G, X, Y):
 	X = set(X).intersection(G.nodes)
 	
 	# step 3. X = X intersection An_{G_{bar{X}}(Y)}
-	X = list( set(X).intersection(graph.find_ancestor(graph.G_cut_incoming_edges(G,X),Y)) )
+	X = sorted( set(X).intersection(graph.find_ancestor(graph.G_cut_incoming_edges(G,X),Y)), key = graph.find_topological_order(G).index )
 	
 	return [G, X, Y]
 
@@ -556,7 +556,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 
 	# Return if P(Y | do(x)) is not ID 
 	elif ID_constant == 0:
-		print( f"P({Y_print} | do({X_print})) is not identifiable from G, since Q[{ID_dict_components}] is not identifiable from G({ID_dict_operations})")
+		print( f"P({Y_print} | do({X_print})) is not identifiable from G, since Q[{sorted(ID_dict_components)}] is not identifiable from G({sorted(ID_dict_operations)})")
 		return None
 
 	# Preprocess the graph 
@@ -645,7 +645,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 	dict_mSBD_TF = {i: [] for i in adj_dict_components.keys()}
 	Q_Di = {i: [] for i in adj_dict_components.keys()}
 	for key, values in adj_dict_components.items():
-		W = list(values[0])
+		W = sorted(values[0], key = lambda x: topo_V.index(x))
 		topo_W = list(graph.find_topological_order( graph.subgraphs(G, W) ))
 		Q_W = compute_Q_W(G, W, topo_W, latex)
 		Q_Di[key].append(Q_W)
@@ -653,7 +653,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 		
 		for i, elem in enumerate(values[1:]):
 			idx = i+1
-			C = list(values[idx])
+			C = sorted(values[idx], key = lambda x: topo_V.index(x))
 			C_values = ', '.join(char.lower() for char in C)
 			operation = adj_dict_operations[key][idx-1]
 			Q_W_mSBD_True_False = dict_mSBD_TF[key][idx-1]
@@ -672,7 +672,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 					continue
 				else: # Q[C] = \sum Q[W], where Q[W] is non-mSBD
 					dict_mSBD_TF[key].append(False) # Q[C] is not mSBD
-					W_minus_C = list(set(W).difference(set(C)))
+					W_minus_C = sorted(set(W).difference(set(C)), key = lambda x: topo_V.index(x))
 					W_minus_C_lower = [char.lower() for char in W_minus_C]
 					W_minus_C_values = ', '.join(W_minus_C_lower)
 					if not latex:
@@ -687,7 +687,7 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 			elif operation == "\u03B4":  # \delta 
 				dict_mSBD_TF[key].append(False) #Q[C] is not mSBD admissible 
 				if Q_W_mSBD_True_False: # Q[W] is mSBD.  Q[C] = Q[W]/Q[W\C] where 
-					W_minus_C = list(set(W).difference(set(C)))
+					W_minus_C = sorted(set(W).difference(set(C)), key = lambda x: topo_V.index(x))
 					R = list(graph.find_parents(G, W_minus_C))
 					if mSBD.constructive_SAC_criterion(G, R, W_minus_C): # if Q[W\C] is mSBD
 						Q_W_C = mSBD.mSBD_estimand(G, R, W_minus_C, latex, minimum = True)
@@ -707,11 +707,11 @@ def causal_identification(G,X,Y,latex = True, copyTF=True):
 							Wi_to_Wm = topo_W[c_index:]
 							Wi1_to_Wm = topo_W[c_index+1:]
 							# Q[W1,...,W{i}]
-							W_1_to_i = list(set(W).difference(set(Wi1_to_Wm)))
+							W_1_to_i = sorted(set(W).difference(set(Wi1_to_Wm)), key = lambda x: topo_V.index(x))
 							R_W_1_to_i = list(graph.find_parents(G, W_1_to_i))
 							numerator = mSBD.mSBD_estimand(G, R_W_1_to_i, W_1_to_i, latex, minimum = True)
 							# Q[W1,...,W{i-1}]
-							W_1_to_i1 = list(set(W).difference(set(Wi_to_Wm))) 
+							W_1_to_i1 = sorted(set(W).difference(set(Wi_to_Wm)), key = lambda x: topo_V.index(x)) 
 							if len(W_1_to_i1) == 0:
 								Q_C_component_element = f"{numerator}"
 								Q_C_component.append(Q_C_component_element)
