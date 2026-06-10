@@ -9,3 +9,4 @@ log_experiments/
 *.html
 examples-PID/
 /CausalPy/
+!tutorials/*_files/*.png

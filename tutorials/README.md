@@ -4,8 +4,10 @@ Three worked, runnable notebooks. Each has a rendered Markdown copy next to it s
 can read it on GitHub without launching Jupyter.
 
 1. **[Identification](01_identification.ipynb)** &nbsp;([markdown](01_identification.md))
-   — turn a causal graph into an estimand: back-door, front-door, a c-component
-   ("Napkin") effect, and a non-identifiable case.
+   — turn a causal graph into an estimand across seven cases: back-door, front-door,
+   the Napkin graph, a nested Napkin, a multi-treatment sequential (mSBD) effect,
+   plan identification, and a non-identifiable bow — each with the **drawn ADMG**
+   and the **rendered LaTeX formula**.
 2. **[Estimation](02_estimation.ipynb)** &nbsp;([markdown](02_estimation.md))
    — estimate `P(Y | do(X))` from data with the OM / IPW / DML estimators and compare
    to a known ground truth.
