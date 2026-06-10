@@ -840,6 +840,138 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123
 				ATE[estimator][tuple(x_val)] += Q_D_val[estimator]
 	return ATE
 
+def estimate_FD(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, n_folds=2, **kwargs):
+	"""
+	Front-door estimator with OM / IPW / DML (generalized front-door with baseline
+	covariates C, in the style of Fulcher & Tchetgen Tchetgen 2020):
+
+		ψ(x) = Σ_c p(c) Σ_z f(z | x, c) Σ_{x'} E[Y_ind | x', z, c] p(x' | c)
+
+	with Y_ind = 1{Y = y_val}. Nuisances (all cross-fitted, XGBoost):
+		f(z | x, c)   - mediator model over discrete Z-configurations
+		π(x | c)      - treatment model over discrete X-configurations
+		μ(x, z, c)    - outcome model E[Y_ind | x, z, c]
+	and with η(z, c) = Σ_{x'} μ(x', z, c) π(x' | c),  ξ(x, c) = Σ_z f(z|x,c) η(z, c):
+
+		OM  = E_n[ ξ(x, C) ]
+		IPW = E_n[ Y_ind · f(Z | x, C) / f(Z | X, C) ]
+		DML = E_n[ f(Z|x,C)/f(Z|X,C) · (Y_ind − μ(X,Z,C))
+		           + 1{X=x}/π(x|C) · (η(Z,C) − ξ(x,C)) + ξ(x,C) ]
+
+	Z and X must be discrete (their observed configurations are enumerated);
+	C may be continuous or high-dimensional - it only enters as model features.
+	"""
+	cluster_variables = kwargs.get('cluster_variables', None)
+
+	np.random.seed(int(seednum))
+	random.seed(int(seednum))
+
+	G = graph.unfold_graph_from_data(G, cluster_variables, obs_data)
+	ZC = frontdoor.constructive_minimum_FD(G, X, Y)
+	if not ZC:
+		raise NotImplementedError("estimate_FD: no front-door (Z, C) sets found for this graph")
+	Z = sorted(ZC['Z'])
+	C = sorted(ZC['C'])
+
+	n = len(obs_data)
+	Y_ind = np.ones(n)
+	for j, Yj in enumerate(Y):
+		Y_ind *= (obs_data[Yj].values == y_val[j]).astype(float)
+
+	# Discrete configurations of Z and X, label-encoded
+	z_configs = sorted(set(map(tuple, obs_data[Z].values.tolist())))
+	x_configs = sorted(set(map(tuple, obs_data[X].values.tolist())))
+	z_code = np.array([z_configs.index(tuple(row)) for row in obs_data[Z].values.tolist()])
+	x_code = np.array([x_configs.index(tuple(row)) for row in obs_data[X].values.tolist()])
+	nZ, nX = len(z_configs), len(x_configs)
+
+	feat_f  = sorted(set(X) | set(C))          # features for f(z | x, c)
+	feat_mu = sorted(set(X) | set(Z) | set(C)) # features for μ(x, z, c)
+
+	def xgb_clf():
+		return xgb.XGBClassifier(n_estimators=100, max_depth=4, n_jobs=4, random_state=int(seednum),
+								eval_metric='logloss', verbosity=0)
+	def xgb_reg():
+		return xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse', n_jobs=4,
+								booster='gbtree', gamma=0, min_child_weight=1, subsample=0.8,
+								alpha=0, random_state=int(seednum), verbosity=0)
+
+	# Cross-fitted per-row nuisance arrays
+	F_obs   = np.zeros(n)             # f(Z_i | X_i, C_i)
+	F_at    = np.zeros((n, nX, nZ))   # f(z | x, C_i) for every (x, z) configuration
+	PI      = np.zeros((n, nX))       # π(x | C_i)
+	MU_obs  = np.zeros(n)             # μ(X_i, Z_i, C_i)
+	MU_grid = np.zeros((n, nX, nZ))   # μ(x, z, C_i) for every (x, z) configuration
+
+	kf = KFold(n_splits=n_folds, shuffle=True, random_state=int(seednum))
+	for train_idx, test_idx in kf.split(obs_data):
+		train, test = obs_data.iloc[train_idx], obs_data.iloc[test_idx]
+
+		# f(z-config | X, C)
+		f_model = xgb_clf().fit(train[feat_f].values, z_code[train_idx])
+		f_classes = list(f_model.classes_)
+		proba = f_model.predict_proba(test[feat_f].values)
+		F_obs[test_idx] = proba[np.arange(len(test_idx)), [f_classes.index(zc) for zc in z_code[test_idx]]]
+		for xi, x_cfg in enumerate(x_configs):
+			test_x = test.copy()
+			for col, val in zip(X, x_cfg):
+				test_x[col] = val
+			proba_x = f_model.predict_proba(test_x[feat_f].values)
+			for zi in range(nZ):
+				F_at[test_idx, xi, zi] = proba_x[:, f_classes.index(zi)] if zi in f_classes else 0.0
+
+		# π(x-config | C)
+		if len(C) > 0:
+			pi_model = xgb_clf().fit(train[C].values, x_code[train_idx])
+			pi_classes = list(pi_model.classes_)
+			proba_pi = pi_model.predict_proba(test[C].values)
+			for xi in range(nX):
+				PI[test_idx, xi] = proba_pi[:, pi_classes.index(xi)] if xi in pi_classes else 0.0
+		else:
+			for xi in range(nX):
+				PI[test_idx, xi] = float(np.mean(x_code[train_idx] == xi))
+
+		# μ(x, z, c) = E[Y_ind | x, z, c]
+		mu_model = xgb_reg().fit(train[feat_mu].values, Y_ind[train_idx])
+		MU_obs[test_idx] = mu_model.predict(test[feat_mu].values)
+		for xi, x_cfg in enumerate(x_configs):
+			for zi, z_cfg in enumerate(z_configs):
+				test_xz = test.copy()
+				for col, val in zip(X, x_cfg):
+					test_xz[col] = val
+				for col, val in zip(Z, z_cfg):
+					test_xz[col] = val
+				MU_grid[test_idx, xi, zi] = mu_model.predict(test_xz[feat_mu].values)
+
+	# η(z, C_i) = Σ_{x'} μ(x', z, C_i) π(x' | C_i);   per-row, per-z
+	ETA = np.einsum('ixz,ix->iz', MU_grid, PI)
+	eta_obs = ETA[np.arange(n), z_code]
+
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+	ATE = {estimator: {} for estimator in list_estimators}
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
+	for _, x_val in X_values_combinations.iterrows():
+		x_tuple = tuple(x_val)
+		if x_tuple not in x_configs:
+			for estimator in list_estimators:
+				ATE[estimator][x_tuple] = 0.0
+			continue
+		xi = x_configs.index(x_tuple)
+
+		F_x = F_at[:, xi, :]                                   # f(z | x, C_i)
+		xi_vals = F_x[np.arange(n), z_code]                    # f(Z_i | x, C_i)
+		ksi = np.sum(F_x * ETA, axis=1)                        # ξ(x, C_i)
+
+		ATE["OM"][x_tuple] = float(np.mean(ksi))
+		if not only_OM:
+			w = xi_vals / np.clip(F_obs, 1e-3, None)
+			ATE["IPW"][x_tuple] = float(np.mean(Y_ind * w))
+			ind_x = (x_code == xi).astype(float)
+			pi_x = np.clip(PI[:, xi], 1e-3, None)
+			dml_scores = w * (Y_ind - MU_obs) + (ind_x / pi_x) * (eta_obs - ksi) + ksi
+			ATE["DML"][x_tuple] = float(np.mean(dml_scores))
+	return ATE
+
 def check_mSBD_ratio(G, X, Y):
 	"""
 	Check whether P(Y | do(X)) reduces to a single ratio of two mSBD-expressible
@@ -974,6 +1106,11 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 			ATE, _, _, _ = est_mSBD.estimate_SBD(G, X, Y, obs_data, cluster_map=cluster_map, only_OM=only_OM, seednum=seednum)
 		else:
 			ATE, _, _, _ = est_mSBD.estimate_mSBD_y(G, X, Y, y_val, obs_data, cluster_map=cluster_map, only_OM=only_OM, seednum=seednum)
+		return clip_ATE(ATE)
+
+	satisfied_FD = frontdoor.constructive_minimum_FD(G, X, Y)
+	if satisfied_FD:
+		ATE = estimate_FD(G, X, Y, y_val, obs_data, only_OM=only_OM, seednum=seednum, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
 
 	satisfied_Tian = tian.check_Tian_criterion(G, X)
