@@ -542,6 +542,7 @@ def FD_SCM(seednum = None, dC = 3, dZ = 2):
 		first_row = [2**(-abs(0 - k) - 1) for k in range(dC)]
 		toeplitz_matrix = toeplitz(first_column, first_row)
 		C = stats.multivariate_normal.rvs(mean = np.zeros(dC), cov = toeplitz_matrix, size=num_samples)
+		C = C.reshape(num_samples, dC)
 		for didx in range(dC):
 			C_idx_val = inv_logit( C[:,didx] + U_CX + U_CY + 2 )
 			C[:,didx] = np.random.binomial(1, C_idx_val)
@@ -559,7 +560,8 @@ def FD_SCM(seednum = None, dC = 3, dZ = 2):
 		first_row = [2**(-abs(0 - k) - 1) for k in range(dZ)]
 		toeplitz_matrix = toeplitz(first_column, first_row)
 		Z = stats.multivariate_normal.rvs(mean = np.zeros(dZ), cov = toeplitz_matrix, size=num_samples)
-		
+		Z = Z.reshape(num_samples, dZ)
+
 		coeff_Z = [-(i) ** (-2) for i in range(1, dC + 1)]
 		for didx in range(dZ):
 			prob_Z = inv_logit( np.dot(np.array(coeff_Z), np.array(C).T) + Z[:,didx] + (2*X-1) + noise )
