@@ -32,9 +32,10 @@ import warnings; warnings.filterwarnings('ignore')
 
 `causal_identification` prints its reasoning as it works, so we wrap it to keep only
 the returned estimand — once for the plain-text form (`latex=False`) and once for the
-LaTeX form (`latex=True, copyTF=False`). A small drawing helper renders the ADMG:
-**orange = treatment, green = outcome, blue = observed covariate, gray dashed =
-latent confounder**.
+LaTeX form (`latex=True, copyTF=False`). A small drawing helper renders the ADMG
+with observed nodes flowing **left to right in topological (causal) order** and
+latent confounders in a band above: **orange = treatment, green = outcome, blue =
+observed covariate, gray dashed = latent confounder**.
 
 
 ```python
@@ -63,25 +64,71 @@ def idq_latex(G, X, Y):
         return identify.causal_identification(G, X, Y, latex=True, copyTF=False)
 
 
+def admg_layout(G):
+    """Layered layout: observed nodes flow left-to-right in topological order
+    (one column per topological generation), latent U-nodes sit in a band above
+    the variables they confound. Deterministic, and nodes never overlap."""
+    obs = [n for n in G.nodes if not n.startswith("U")]
+    lat = sorted(n for n in G.nodes if n.startswith("U"))
+    layers = [sorted(layer) for layer in nx.topological_generations(G.subgraph(obs))]
+    pos = {}
+    for i, layer in enumerate(layers):
+        for j, n in enumerate(layer):
+            pos[n] = (1.6 * i, -1.2 * (j - (len(layer) - 1) / 2.0))
+    top = max((y for _, y in pos.values()), default=0.0) + 1.4
+    taken = []
+    for idx, u in enumerate(lat):
+        kids = [c for c in sorted(G.successors(u)) if c in pos]
+        x = sum(pos[c][0] for c in kids) / len(kids) if kids else 1.6 * idx
+        y = top + 0.9 * (idx % 2)                  # alternate between two bands
+        while any(abs(x - px) < 1.0 and abs(y - py) < 0.8 for px, py in taken):
+            x += 1.1                               # push right until clear
+        pos[u] = (x, y)
+        taken.append((x, y))
+    return pos
+
+
 def draw_admg(G, X, Y, title=""):
     """Draw the ADMG: treatments orange, outcomes green, covariates blue,
     latent U-nodes gray with dashed confounding arrows."""
-    pos = nx.kamada_kawai_layout(G)
+    pos = admg_layout(G)
     latent = [n for n in G.nodes if n.startswith("U")]
     treat = [n for n in G.nodes if n in X]
     outc = [n for n in G.nodes if n in Y]
     other = [n for n in G.nodes if n not in latent + treat + outc]
-    plt.figure(figsize=(5.4, 3.8))
+    # solid causal edges: short hops get a gentle arc; long hops arc further out,
+    # alternating above/below so flat chains stay readable
+    by_rad, above, below = {}, 0.0, 0.0
+    for a, b in ((a, b) for a, b in G.edges if not a.startswith("U")):
+        dx = abs(pos[b][0] - pos[a][0])
+        span = max(1, round(dx / 1.6))
+        rad = 0.12 if span == 1 else min(0.13 + 0.05 * span, 0.30) * (1 if span % 2 == 0 else -1)
+        sag = abs(rad) * dx / 2.0                  # arc height beyond the chord
+        if rad >= 0: above = max(above, sag)
+        else: below = max(below, sag)
+        by_rad.setdefault(rad, []).append((a, b))
+
+    xs = [p[0] for p in pos.values()]
+    ys = [p[1] for p in pos.values()]
+    x_lo, x_hi = min(xs) - 0.9, max(xs) + 0.9
+    y_lo, y_hi = min(ys) - max(0.85, below + 0.6), max(ys) + max(0.85, above + 0.6)
+    plt.figure(figsize=(max(5.6, 0.95 * (x_hi - x_lo) + 0.6),
+                        max(2.4, 0.9 * (y_hi - y_lo) + 0.55)))
     for nodes, fc, ec in [(other, "#bfdbfe", "#1e40af"), (treat, "#fed7aa", "#c2410c"),
                           (outc, "#bbf7d0", "#15803d"), (latent, "#e5e7eb", "#6b7280")]:
         nx.draw_networkx_nodes(G, pos, nodelist=nodes, node_color=fc,
                                edgecolors=ec, node_size=1250)
-    solid = [(a, b) for a, b in G.edges if not a.startswith("U")]
+    for rad, edges in sorted(by_rad.items()):
+        nx.draw_networkx_edges(G, pos, edgelist=edges, node_size=1350, arrowsize=15,
+                               width=1.4, connectionstyle=f"arc3,rad={rad}")
     dashed = [(a, b) for a, b in G.edges if a.startswith("U")]
-    nx.draw_networkx_edges(G, pos, edgelist=solid, node_size=1250, arrowsize=15, width=1.4)
-    nx.draw_networkx_edges(G, pos, edgelist=dashed, node_size=1250, arrowsize=13,
-                           style="dashed", edge_color="#9ca3af")
+    nx.draw_networkx_edges(G, pos, edgelist=dashed, node_size=1350, arrowsize=13,
+                           style="dashed", edge_color="#9ca3af",
+                           connectionstyle="arc3,rad=-0.08")
     nx.draw_networkx_labels(G, pos, font_size=9)
+    ax = plt.gca()
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(y_lo, y_hi)
     plt.title(title)
     plt.axis("off")
     plt.tight_layout()
