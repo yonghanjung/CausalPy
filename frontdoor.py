@@ -143,14 +143,14 @@ def constructive_minimum_FD(G, X, Y):
 
 
 def frontdoor_estimand(X,Y,Z,C,latex):
-	CZ = list(set(C).union(set(Z)))
-	XZC = list(set(CZ).union(set(X)))
-	C = list(set(C))
-	XC = list(set(X).union(set(C)))
+	CZ = sorted(set(C).union(set(Z)))
+	XZC = sorted(set(CZ).union(set(X)))
+	C = sorted(set(C))
+	XC = sorted(set(X).union(set(C)))
 
 	Y_val = ', '.join(Y)
 	X_val = ', '.join(X)
-	Z_val = ', '.join(Z)
+	Z_val = ', '.join(sorted(Z))
 	XC_val = ', '.join(XC)
 	XZC_val = ', '.join(XZC)
 	X_lower_val = ', '.join(char.lower() for char in X)

@@ -172,13 +172,13 @@ def adjustment_estimand(X,Y,Z,latex):
 	Returns:
 	string: "sum_{z}P(y | x,z)P(z)"
 	'''
-	Z = list(set(Z))
+	Z = sorted(set(Z))
 	Z_val = ', '.join(Z)
 	Z_lower_val = ', '.join(char.lower() for char in Z)
 
 	Y_val = ', '.join(Y)
 	X_val = ', '.join(X)
-	XZ = list(set(X).union(set(Z)))
+	XZ = sorted(set(X).union(set(Z)))
 	XZ_val = ', '.join(XZ)
 
 	if not latex:

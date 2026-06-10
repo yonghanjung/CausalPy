@@ -297,7 +297,7 @@ def find_parents(G, C):
 	# Filter out latent variables and add component if not empty
 	parents = {node for node in parents if not node.startswith('U') and node not in C}
 
-	return list(parents)
+	return sorted(parents)
 
 def find_children(G, C):
 	"""
