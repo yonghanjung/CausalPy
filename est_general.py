@@ -840,6 +840,107 @@ def estimate_product_QD(G, X, Y, y_val, obs_data, only_OM = False, seednum = 123
 				ATE[estimator][tuple(x_val)] += Q_D_val[estimator]
 	return ATE
 
+def check_mSBD_ratio(G, X, Y):
+	"""
+	Check whether P(Y | do(X)) reduces to a single ratio of two mSBD-expressible
+	Q-functionals, Q[W*](x, y) / Q[W* \\ Y](x) (e.g., the Napkin graph).
+
+	Returns a dict {"W", "W_minus_C", "R"} describing the ratio, or None.
+	"""
+	# No outer marginalization: ancestors of Y in G(V \ X) must be exactly Y
+	V_minus_X = list(set(G.nodes()).difference(set(X)))
+	D = set(graph.find_ancestor(graph.subgraphs(G, V_minus_X), Y)) | set(Y)
+	if D != set(Y):
+		return None
+
+	result = identify.return_AC_tree(G, X, Y)
+	if result is None:
+		return None
+	adj_dict_components, adj_dict_operations = result
+	if len(adj_dict_components) != 1:
+		return None
+	key = list(adj_dict_components.keys())[0]
+	series = adj_dict_components[key]
+	operations = adj_dict_operations[key]
+
+	# return_AC_tree gives the clipped series; operations[i] maps series[i] -> series[i+1].
+	# The ratio shape is exactly two elements joined by a single δ.
+	if len(series) != 2 or operations != ['δ']:
+		return None
+
+	topo_V = graph.find_topological_order(G)
+	W = sorted(series[0], key=lambda v: topo_V.index(v))
+	C = list(series[1])
+	R_head = graph.find_parents(G, W)
+	if not mSBD.constructive_SAC_criterion(G, R_head, W):
+		return None
+	# The ratio must isolate exactly Y, and W must be exactly X ∪ Y
+	if set(C) != set(Y) or set(W) != set(X) | set(Y):
+		return None
+	W_minus_C = sorted(set(W).difference(set(C)), key=lambda v: topo_V.index(v))
+	R_W = graph.find_parents(G, W)
+	R_WC = graph.find_parents(G, W_minus_C)
+	if set(R_W) != set(R_WC):
+		return None
+	if not mSBD.constructive_SAC_criterion(G, R_WC, W_minus_C):
+		return None
+	return {"W": W, "W_minus_C": W_minus_C, "R": sorted(R_W, key=lambda v: topo_V.index(v))}
+
+def estimate_mSBD_ratio(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, **kwargs):
+	"""
+	Estimate P(Y | do(X)) for ratio-form c-component effects (e.g., the Napkin):
+
+		P(y | do(x)) = Q[W](x, y; r) / Q[W \\ Y](x; r)      for any value r of R = pa(W),
+
+	where both Q-factors are mSBD-expressible. Each Q-factor is estimated with the
+	cross-fitted mSBD engine (OM / IPW / DML via est_mSBD.estimate_mSBD_xy), the
+	numerator and denominator are pooled over the observed R-configurations with
+	empirical weights P̂(r) (valid since Q[W] = ψ · Q[W \\ Y] for every r), and the
+	ratio is taken once at the end. This avoids the per-configuration Q-table
+	assembly of estimate_general, which is numerically fragile for IPW/DML.
+	"""
+	cluster_variables = kwargs.get('cluster_variables', None)
+
+	np.random.seed(int(seednum))
+	random.seed(int(seednum))
+
+	G = graph.unfold_graph_from_data(G, cluster_variables, obs_data)
+
+	info = check_mSBD_ratio(G, X, Y)
+	if info is None:
+		raise NotImplementedError("P(Y|do(X)) for this graph is not a single mSBD ratio; use estimate_general")
+	W, W_minus_C, R = info["W"], info["W_minus_C"], info["R"]
+
+	list_estimators = ["OM"] if only_OM else ["OM", "IPW", "DML"]
+
+	# Empirical distribution of the (discrete) parent configurations R
+	if len(R) > 0:
+		R_counts = obs_data[R].value_counts(normalize=True)
+		r_configs = [(tuple(idx) if isinstance(idx, tuple) else (idx,), float(p)) for idx, p in R_counts.items()]
+	else:
+		r_configs = [((), 1.0)]
+
+	X_values_combinations = pd.DataFrame(product(*[np.unique(obs_data[Vi]) for Vi in X]), columns=X)
+
+	ATE = {estimator: {} for estimator in list_estimators}
+	for _, x_val in X_values_combinations.iterrows():
+		x_val_tuple = tuple(x_val)
+		w_vals = [x_val[v] if v in X else y_val[Y.index(v)] for v in W]
+		wc_vals = [x_val[v] for v in W_minus_C]
+
+		num = {estimator: 0.0 for estimator in list_estimators}
+		den = {estimator: 0.0 for estimator in list_estimators}
+		for r_vals, r_prob in r_configs:
+			Q_num, _, _, _ = est_mSBD.estimate_mSBD_xy(G, R, W, list(r_vals), w_vals, obs_data, only_OM = only_OM, seednum = seednum)
+			Q_den, _, _, _ = est_mSBD.estimate_mSBD_xy(G, R, W_minus_C, list(r_vals), wc_vals, obs_data, only_OM = only_OM, seednum = seednum)
+			for estimator in list_estimators:
+				num[estimator] += r_prob * Q_num[estimator]
+				den[estimator] += r_prob * Q_den[estimator]
+
+		for estimator in list_estimators:
+			ATE[estimator][x_val_tuple] = (num[estimator] / den[estimator]) if den[estimator] > 0 else 0.0
+	return ATE
+
 def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123, clip_val = True, minval = 0, maxval = 1, **kwargs):
 	# Function to clip ATE values
 	def clip_ATE(ATE):
@@ -890,9 +991,13 @@ def estimate_case_by_case(G, X, Y, y_val, obs_data, only_OM = False, seednum=123
 		ATE = estimate_product_QD(G, X, Y, y_val, obs_data, only_OM=True)
 		return clip_ATE(ATE)
 
-	else:
-		ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM=True, cluster_variables = cluster_variables)
+	satisfied_ratio = check_mSBD_ratio(G, X, Y)
+	if satisfied_ratio:
+		ATE = estimate_mSBD_ratio(G, X, Y, y_val, obs_data, only_OM=only_OM, seednum=seednum, cluster_variables = cluster_variables)
 		return clip_ATE(ATE)
+
+	ATE = estimate_general(G, X, Y, y_val, obs_data, only_OM=True, cluster_variables = cluster_variables)
+	return clip_ATE(ATE)
 
 
 if __name__ == "__main__":
