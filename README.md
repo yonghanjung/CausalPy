@@ -103,12 +103,16 @@ back-door (BD) ─────────────► est_mSBD.estimate_BD
 sequential back-door (mSBD) ─► est_mSBD.estimate_SBD   (single outcome)
                               └ est_mSBD.estimate_mSBD_y (multiple outcomes)
 Tian / gTian / product ─────► est_general.estimate_{Tian, gTian, product_QD}
+ratio-form c-component ─────► est_general.estimate_mSBD_ratio   (e.g. the Napkin)
 otherwise (general c-comp.) ─► est_general.estimate_general
 ```
 
 Each estimator returns `(ATE, VAR, lower_CI, upper_CI)` dictionaries keyed by estimator and
-treatment value, and uses K-fold cross-fitting with XGBoost nuisances and OSQP balancing
-weights.
+treatment value, with K-fold cross-fitting and XGBoost nuisances. The **IPW weights are
+minimum-norm balancing weights** — solved per treatment step as a quadratic program (OSQP)
+that matches the fitted outcome-model moments of the weighted treated subgroup to the full
+sample — **not** raw inverse-propensity estimates; DML combines the outcome model with these
+balancing weights into the doubly-robust form.
 
 ---
 
@@ -150,9 +154,13 @@ CausalPy is a research codebase. The estimation paths differ in maturity:
 - **Well-tested:** back-door (`BD`), sequential back-door (`SBD`), and multi-outcome
   `mSBD` estimation with OM / IPW / DML. These are **deterministic across processes**
   (feature-column ordering is fixed).
-- **Experimental:** the Tian / general **c-component** estimators run in **`only_OM`** mode;
-  their IPW/DML composition is not implemented and raises `NotImplementedError`. Numeric
-  correctness for continuous covariates / outcomes is a work in progress.
+- **Ratio-form c-component effects** (the Napkin class, detected by `check_mSBD_ratio`) get
+  full **OM / IPW / DML** via `estimate_mSBD_ratio`: each Q-factor is estimated with the
+  cross-fitted mSBD engine and the ratio is taken once at the end.
+- **Experimental:** the remaining Tian / general **c-component** estimators run in
+  **`only_OM`** mode; their IPW/DML composition is not implemented and raises
+  `NotImplementedError`. Numeric correctness for continuous covariates / outcomes is a work
+  in progress.
 - Graphs that the AC-tree decomposition cannot handle raise a clear `NotImplementedError`
   instead of crashing.
 - `estimate_SBD` is **single-outcome**; use `estimate_mSBD_y` for multiple outcomes (the
