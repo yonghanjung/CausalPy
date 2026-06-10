@@ -9,11 +9,10 @@ can read it on GitHub without launching Jupyter.
    plan identification, and a non-identifiable bow — each with the **drawn ADMG**
    and the **rendered LaTeX formula**.
 2. **[Estimation](02_estimation.ipynb)** &nbsp;([markdown](02_estimation.md))
-   — estimate effects on **four graphs**: back-door, a multi-treatment sequential
-   regime `do(X1, X2)`, the Napkin ratio-form c-component effect (all with
-   OM / balancing-IPW / DML), and a one-dimensional front-door graph (general
-   c-component, OM-only) — each with the drawn ADMG and a comparison to the SCM
-   ground truth.
+   — estimate effects on **four graphs**, all with OM / balancing-IPW / DML:
+   back-door, a multi-treatment sequential regime `do(X1, X2)`, the Napkin
+   ratio-form c-component effect, and a one-dimensional front-door graph — each
+   with the drawn ADMG and a comparison to the SCM ground truth.
 3. **[Custom SCM](03_custom_scm.ipynb)** &nbsp;([markdown](03_custom_scm.md))
    — build your own structural causal model from scratch and run the full
    identify → estimate → validate loop on it.

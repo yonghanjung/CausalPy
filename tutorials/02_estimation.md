@@ -15,8 +15,8 @@ by method and treatment value. We walk **four graphs of increasing difficulty**:
 2. a **multi-treatment sequential (mSBD)** graph — effects of a joint `do(X1, X2)`;
 3. the **Napkin** graph — a ratio-form c-component effect, estimated by a dedicated
    ratio estimator with **all three** estimators;
-4. a **front-door** graph — estimated through the general c-component machinery,
-   which runs in outcome-model-only mode.
+4. a **front-door** graph — a dedicated front-door estimator, again with **all
+   three** estimators (and covariates that never need to be enumerated).
 
 Because every example is a full structural causal model, we can always compare to the
 true `P(Y=1 | do(X=x))`.
@@ -296,15 +296,23 @@ truth — the ratio decomposition lets the well-tested adjustment engine do all 
 statistical work. The same route handles harder ratio-form graphs such as the
 *nested* Napkin from Tutorial 1.
 
-## 4. Front-door: the general c-component path
+## 4. Front-door: a dedicated three-estimator route
 
-Front-door graphs have no adjustment set and no ratio form, so they fall through to
-the **general c-component estimator**, which assembles the estimand from Q-factor
-tables. That assembly is currently sound for the plug-in only, so the dispatcher runs
-it in **outcome-model-only mode** — the returned dictionary has just `OM`, and the
-experimental paths raise a clear `NotImplementedError` rather than returning a wrong
-number. Here `Z` and `X` are one-dimensional binary variables (`dZ=1`), and the
-confounder `C` is a small binary cluster (`dC=3`).
+Front-door graphs have no adjustment set and no ratio form. The dispatcher routes
+them to `estimate_FD`, which implements the three classic front-door estimators
+(cross-fitted, in the style of Fulcher & Tchetgen Tchetgen 2020):
+
+- **OM** — the plug-in `ξ(x, C) = Σ_z f(z|x,C) Σ_{x'} μ(x',z,C) π(x'|C)`, averaged
+  over the sample;
+- **IPW** — `E[ Y · f(Z|x,C) / f(Z|X,C) ]`, reweighting by the **mediator** model
+  rather than a treatment propensity;
+- **DML** — the multiply-robust one-step combining all three nuisances
+  (`f`, `π`, `μ`).
+
+Only `Z` and `X` configurations are enumerated — the covariates `C` enter purely as
+model features, so they may be continuous or high-dimensional. Here `Z` and `X` are
+one-dimensional binary variables (`dZ=1`) and `C` is a small binary cluster
+(`dC=3`).
 
 
 ```python
@@ -337,13 +345,16 @@ for est in ate:
 show("truth", truth)
 ```
 
-    OM     {(0,): 0.321, (1,): 0.309}
+    OM     {(0,): 0.321, (1,): 0.31}
+    IPW    {(0,): 0.321, (1,): 0.31}
+    DML    {(0,): 0.321, (1,): 0.308}
     truth  {(0,): 0.319, (1,): 0.305}
 
 
-On this discrete graph the plug-in tracks the truth closely. With *continuous*
-covariates the general path becomes slow (it enumerates observed configurations) —
-that is the main open limitation of the experimental c-component machinery.
+All three estimators track the truth. Because `C` is never enumerated, the same
+route handles front-door graphs with **continuous** covariates at the same speed —
+e.g. `example_SCM.Canonical_FD_SCM` with four continuous confounder columns runs in
+about a second with all three estimators.
 
 ---
 
@@ -354,8 +365,9 @@ that is the main open limitation of the experimental c-component machinery.
 | back-door | `est_mSBD.estimate_BD` | OM, IPW, DML |
 | sequential back-door (single outcome) | `est_mSBD.estimate_SBD` | OM, IPW, DML |
 | sequential back-door (multiple outcomes) | `est_mSBD.estimate_mSBD_y` | OM, IPW, DML |
+| front-door | `est_general.estimate_FD` | OM, IPW, DML |
 | ratio-form c-component (Napkin-class) | `est_general.estimate_mSBD_ratio` | OM, IPW, DML |
-| other c-component (e.g. front-door) | `est_general.estimate_*` | OM only (experimental) |
+| other c-component | `est_general.estimate_*` | OM only (experimental) |
 
 **Next:** [Tutorial 3 — Custom SCM](03_custom_scm.ipynb) builds a structural causal
 model from scratch and runs this same identify → estimate → validate loop on it.
